@@ -880,19 +880,13 @@ export function buildHudInjectExpression(snapshot, config) {
 
       // Run toggle sequence strictly on click (+ setTimeout 0) so the user's own mouseup/click
       // finishes BEFORE opening Radix/Base-UI dropdowns and cannot outside-click-dismiss them.
-      // Keep the popover open so clicking the same button again closes the sidebar immediately.
       popEl.onclick = function(ev) {
         window.__agyHudPopPointerDown = false;
         var link = ev.target && ev.target.closest ? ev.target.closest('[data-agy-action="open-sidecar"]') : null;
         if (!link) return;
         ev.preventDefault();
         ev.stopPropagation();
-
-        // Keep popover visible across sidebar layout shift so a second click toggles it closed cleanly
-        window.__agyHudKeepPopOpenUntil = Date.now() + 900;
-        if (!popEl.classList.contains('is-visible')) {
-          popEl.classList.add('is-visible');
-        }
+        popEl.classList.remove('is-visible');
 
         var opSeq = (window.__agyHudSidecarOpSeq = (window.__agyHudSidecarOpSeq || 0) + 1);
 
@@ -1109,12 +1103,9 @@ export function buildHudInjectExpression(snapshot, config) {
       function scheduleClose() {
         clearTimeout(showTimer);
         clearTimeout(hideTimer);
-        var remainHold = Math.max(0, Number(window.__agyHudKeepPopOpenUntil || 0) - Date.now());
         hideTimer = setTimeout(function() {
-          if (popEl.matches && popEl.matches(':hover')) return;
-          if (pillEl.matches && pillEl.matches(':hover')) return;
           popEl.classList.remove('is-visible');
-        }, Math.max(380, remainHold + 240));
+        }, 380);
       }
 
       pillEl.addEventListener('mouseenter', openPop);
@@ -1401,10 +1392,7 @@ export function buildHudInjectExpression(snapshot, config) {
         popEl.innerHTML = nextPopHtml;
       }
       bindHoverEvents(pillEl, popEl);
-      var lockPos =
-        Date.now() < Number(window.__agyHudKeepPopOpenUntil || 0) ||
-        (popEl.matches && popEl.matches(':hover'));
-      if (popEl.classList.contains('is-visible') && !lockPos) {
+      if (popEl.classList.contains('is-visible')) {
         positionPopover(pillEl, popEl);
       }
       return true;
