@@ -339,6 +339,7 @@ export function assembleHudSnapshot({
       lastDurationSec: speedMetrics?.lastDurationSec ?? null,
       lastStreamSec: speedMetrics?.lastStreamSec ?? null,
       lastTtftSec: speedMetrics?.lastTtftSec ?? null,
+      avgTtftSec: speedMetrics?.avgTtftSec ?? null,
       lastOutputTokens: speedMetrics?.lastOutputTokens ?? Number(cache.lastOutputTokens || 0),
     },
     turns: Array.isArray(speedMetrics?.turns) ? speedMetrics.turns : [],

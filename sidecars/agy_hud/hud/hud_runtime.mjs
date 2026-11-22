@@ -743,8 +743,23 @@ export function buildHudInjectExpression(snapshot, config) {
           var sp = snap.spend || {};
           var turnsArr = Array.isArray(snap.turns) ? snap.turns : [];
           var lastTurnFallback = turnsArr.length > 0 ? turnsArr[turnsArr.length - 1] : null;
-          var curSpeed = spd.latestTokPerSec != null ? spd.latestTokPerSec + ' tok/s' : '--';
-          var avgSpeed = spd.avgTokPerSec != null ? spd.avgTokPerSec + ' tok/s' : '--';
+          function fmtIntTtft(secVal) {
+            var v = Number(secVal);
+            if (!Number.isFinite(v) || v <= 0) return '';
+            if (v < 1) return Math.round(v * 1000) + 'ms';
+            return Math.round(v) + 's';
+          }
+          function fmtSpeedPair(ttftSec, tpsVal) {
+            var tPart = fmtIntTtft(ttftSec);
+            var sNum = Number(tpsVal);
+            var sPart = tpsVal != null && Number.isFinite(sNum) && sNum > 0 ? Math.round(sNum) + ' tok/s' : '';
+            if (tPart && sPart) return tPart + ' · ' + sPart;
+            if (sPart) return sPart;
+            if (tPart) return tPart;
+            return '--';
+          }
+          var curSpeed = fmtSpeedPair(spd.lastTtftSec, spd.latestTokPerSec);
+          var avgSpeed = fmtSpeedPair(spd.avgTtftSec, spd.avgTokPerSec);
           var lastHit = cac.lastHitPct != null ? cac.lastHitPct.toFixed(1) + '%' : '--';
           var totalHit = cac.sessionHitPct != null ? cac.sessionHitPct.toFixed(1) + '%' : '--';
           var turnTok = Number(

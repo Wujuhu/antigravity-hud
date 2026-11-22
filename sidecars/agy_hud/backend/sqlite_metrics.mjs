@@ -415,6 +415,8 @@ export function readConversationSqliteMetrics(appData, convId) {
     let sumOut = 0;
     let sumStream = 0;
     let sumTotDur = 0;
+    let sumTtft = 0;
+    let ttftCount = 0;
     let latestModelName = '';
 
     for (let i = 0; i < rows.length; i++) {
@@ -425,6 +427,10 @@ export function readConversationSqliteMetrics(appData, convId) {
         sumOut += p.outTok;
         sumStream += p.stream;
         sumTotDur += p.totDur;
+        if (p.ttft > 0) {
+          sumTtft += p.ttft;
+          ttftCount += 1;
+        }
       }
     }
 
@@ -435,6 +441,7 @@ export function readConversationSqliteMetrics(appData, convId) {
     const last = validItems[validItems.length - 1];
     const latestRate = computePrimaryTps(last.outTok, last.stream, last.totDur);
     const avgRate = computePrimaryTps(sumOut, sumStream, sumTotDur);
+    const avgTtftSec = ttftCount > 0 ? Math.round((sumTtft / ttftCount) * 100) / 100 : null;
     const turns = buildPerTurnSummaries(validItems, userStepIdxs);
     const lastTurn = turns.length > 0 ? turns[turns.length - 1] : null;
     const sessionTotalTokens = turns.reduce((sum, t) => sum + Number(t.totalTokens || 0), 0);
@@ -450,7 +457,8 @@ export function readConversationSqliteMetrics(appData, convId) {
       avgTokPerSec: avgRate.displayTps,
       lastDurationSec: last.totDur > 0 ? Math.round(last.totDur * 10) / 10 : null,
       lastStreamSec: last.stream > 0 ? Math.round(last.stream * 10) / 10 : null,
-      lastTtftSec: last.ttft > 0 ? Math.round(last.ttft * 10) / 10 : null,
+      lastTtftSec: last.ttft > 0 ? Math.round(last.ttft * 100) / 100 : null,
+      avgTtftSec,
       lastOutputTokens: last.outTok,
       lastTurnTokens: lastTurn ? lastTurn.totalTokens : last.ctx + last.outTok,
       lastTurnCostUsd: lastTurn ? lastTurn.totalCostUsd : 0,

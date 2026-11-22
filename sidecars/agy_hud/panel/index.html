@@ -17,54 +17,7 @@
       <div id="weeklyEstimateBody" class="weekly-body"></div>
     </section>
 
-    <!-- 2. HUD（默认收起，点击展开） -->
-    <details class="panel-group fold" id="hudConfigDetails">
-      <summary class="fold-head">
-        <h2>HUD</h2>
-        <div class="fold-right">
-          <span class="meta fold-summary-text" id="hudSummaryText">Context · TPS · 5h 额度</span>
-          <svg class="fold-chevron" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M6 3.5L10.5 8L6 12.5" />
-          </svg>
-        </div>
-      </summary>
-
-      <div class="fold-body">
-        <ul class="clean-list" id="pillItemsList"></ul>
-
-        <div class="setting-list">
-          <div class="setting-row">
-            <div class="setting-info">
-              <div class="setting-title">上下文显示模式</div>
-              <div class="setting-desc">控制输入栏胶囊中上下文的显示形式</div>
-            </div>
-            <select id="selectCtxFormat" aria-label="上下文显示模式">
-              <option value="percent">占比</option>
-              <option value="tokens">Token</option>
-              <option value="both">占比 + Token</option>
-            </select>
-          </div>
-          <div class="setting-row">
-            <div class="setting-info">
-              <div class="setting-title">上下文上限</div>
-              <div class="setting-desc">默认读取 Antigravity 会话实际窗口上限，可手动覆盖</div>
-            </div>
-            <select id="selectWindowCap" aria-label="上下文上限">
-              <option value="auto">自动</option>
-              <option value="256000">256k</option>
-              <option value="512000">512k</option>
-              <option value="1048576">1M</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="fold-foot">
-          <button class="btn-text" id="btnReset" type="button">恢复默认</button>
-        </div>
-      </div>
-    </details>
-
-    <!-- 3. 界面（默认收起） -->
+    <!-- 2. 界面（默认收起） -->
     <details class="panel-group fold" id="layoutConfigDetails">
       <summary class="fold-head">
         <h2>界面</h2>
@@ -122,12 +75,59 @@
       </div>
     </details>
 
+    <!-- 3. HUD（默认收起，点击展开） -->
+    <details class="panel-group fold" id="hudConfigDetails">
+      <summary class="fold-head">
+        <h2>HUD</h2>
+        <div class="fold-right">
+          <span class="meta fold-summary-text" id="hudSummaryText">Context · TPS · 5h 额度</span>
+          <svg class="fold-chevron" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 3.5L10.5 8L6 12.5" />
+          </svg>
+        </div>
+      </summary>
+
+      <div class="fold-body">
+        <ul class="clean-list" id="pillItemsList"></ul>
+
+        <div class="setting-list">
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">上下文显示模式</div>
+              <div class="setting-desc">控制输入栏胶囊中上下文的显示形式</div>
+            </div>
+            <select id="selectCtxFormat" aria-label="上下文显示模式">
+              <option value="percent">占比</option>
+              <option value="tokens">Token</option>
+              <option value="both">占比 + Token</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">上下文上限</div>
+              <div class="setting-desc">默认读取 Antigravity 会话实际窗口上限，可手动覆盖</div>
+            </div>
+            <select id="selectWindowCap" aria-label="上下文上限">
+              <option value="auto">自动</option>
+              <option value="256000">256k</option>
+              <option value="512000">512k</option>
+              <option value="1048576">1M</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="fold-foot">
+          <button class="btn-text" id="btnReset" type="button">恢复默认</button>
+        </div>
+      </div>
+    </details>
+
     <!-- 4. 更新（默认绑定官方云端仓库） -->
     <section class="panel-group">
       <div class="group-head">
         <div class="title-inline">
           <h2>更新</h2>
-          <span class="ver-tag" id="versionBadge">v1.0.0</span>
+          <span class="ver-tag" id="versionBadge">v1.0.1</span>
           <span class="meta" id="updateStatusText"></span>
         </div>
         <div class="action-inline">
@@ -156,12 +156,10 @@
     <!-- 5. CDP 状态（正常时仅单行状态；异常时才展示提醒与生成启动器） -->
     <section class="panel-group">
       <div class="group-head">
-        <div class="cdp-head-left">
-          <div class="title-inline">
-            <span class="status-dot" id="statusDot"></span>
-            <h2>CDP 状态</h2>
-          </div>
-          <div class="cdp-subnote">该状态决定 HUD 的正常显示</div>
+        <div class="title-inline">
+          <span class="status-dot" id="statusDot"></span>
+          <h2>CDP 状态</h2>
+          <span class="meta cdp-subnote">该状态决定 HUD 的正常显示</span>
         </div>
         <span class="status-badge" id="cdpStateText">检测中</span>
       </div>

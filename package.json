@@ -1,6 +1,6 @@
 {
   "name": "agy-hud",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": false,
   "type": "module",
   "description": "Minimal cross-platform Antigravity composer HUD plugin showing live context, tokens, speed, prompt cache, and quota with customizable items and ordering.",
