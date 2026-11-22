@@ -42,6 +42,7 @@ test('HUD inject and remove expressions parse cleanly as valid JavaScript', () =
   assert.match(injectExpr, new RegExp(HUD_POPOVER_ID));
   assert.match(injectExpr, /"compactionCount":2/);
   assert.match(injectExpr, /压缩 /);
+  assert.match(injectExpr, /sidecar:\/\/agy-hud\/agy_hud\//);
   // Ensure custom order is embedded in payload
   assert.ok(injectExpr.indexOf('"id":"quota"') < injectExpr.indexOf('"id":"context"'));
 });

@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  DEFAULT_UPDATE_REPO_SLUG,
   PILL_ITEM_CATALOG,
   POPOVER_SECTION_CATALOG,
   createConfigStore,
@@ -57,7 +58,7 @@ let latestCdpStatus = {
 let latestLauncherInfo = null;
 let latestUpdateStatus = {
   ok: false,
-  configured: Boolean(configStore.get().updateRepoSlug),
+  configured: Boolean(configStore.get().updateRepoSlug || DEFAULT_UPDATE_REPO_SLUG),
   currentVersion: readInstalledVersion(PLUGIN_ROOT),
   latestVersion: readInstalledVersion(PLUGIN_ROOT),
   hasUpdate: false,
@@ -125,7 +126,7 @@ async function runUpdateCheck({ allowAutoApply = false } = {}) {
   const cfg = configStore.get();
   const currentVersion = readInstalledVersion(PLUGIN_ROOT);
   const res = await checkForUpdates({
-    repoSlug: cfg.updateRepoSlug,
+    repoSlug: cfg.updateRepoSlug || DEFAULT_UPDATE_REPO_SLUG,
     currentVersion,
   });
   latestUpdateStatus = {
@@ -175,7 +176,7 @@ async function runApplyUpdate() {
 function restartUpdateLoop() {
   if (updateTimer) clearInterval(updateTimer);
   const cfg = configStore.get();
-  if (!cfg.autoCheckUpdate || !cfg.updateRepoSlug) return;
+  if (!cfg.autoCheckUpdate || !(cfg.updateRepoSlug || DEFAULT_UPDATE_REPO_SLUG)) return;
   updateTimer = setInterval(() => {
     runUpdateCheck({ allowAutoApply: true }).catch(() => {});
   }, UPDATE_CHECK_INTERVAL_MS);
@@ -301,7 +302,7 @@ async function start() {
   restartUpdateLoop();
   syncOnce().catch(() => {});
   const initCfg = configStore.get();
-  if (initCfg.autoCheckUpdate && initCfg.updateRepoSlug) {
+  if (initCfg.autoCheckUpdate && (initCfg.updateRepoSlug || DEFAULT_UPDATE_REPO_SLUG)) {
     setTimeout(() => {
       runUpdateCheck({ allowAutoApply: true }).catch(() => {});
     }, 5000).unref?.();

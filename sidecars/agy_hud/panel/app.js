@@ -4,6 +4,23 @@
 
   const $ = (id) => document.getElementById(id);
 
+  const GRIP_SVG =
+    '<svg viewBox="0 0 12 12" width="11" height="11" fill="currentColor" aria-hidden="true">' +
+      '<circle cx="4" cy="2.5" r="0.9"/><circle cx="8" cy="2.5" r="0.9"/>' +
+      '<circle cx="4" cy="6" r="0.9"/><circle cx="8" cy="6" r="0.9"/>' +
+      '<circle cx="4" cy="9.5" r="0.9"/><circle cx="8" cy="9.5" r="0.9"/>' +
+    '</svg>';
+
+  const UP_SVG =
+    '<svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M4 10l4-4 4 4"/>' +
+    '</svg>';
+
+  const DOWN_SVG =
+    '<svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M4 6l4 4 4-4"/>' +
+    '</svg>';
+
   function fmtTok(n) {
     const v = Number(n || 0);
     if (!Number.isFinite(v) || v <= 0) return '0';
@@ -48,16 +65,54 @@
     items.forEach((item, idx) => {
       const meta = metaMap.get(item.id) || { label: item.id };
       const li = document.createElement('li');
-      li.className = 'sortable-item';
+      li.className = 'clean-row' + (item.enabled ? '' : ' is-off');
       li.draggable = true;
 
       const left = document.createElement('div');
-      left.className = 'item-left';
+      left.className = 'row-left';
 
-      const handle = document.createElement('span');
-      handle.className = 'drag-handle';
-      handle.textContent = '⋮⋮';
+      const grip = document.createElement('span');
+      grip.className = 'drag-grip';
+      grip.innerHTML = GRIP_SVG;
 
+      const title = document.createElement('span');
+      title.className = 'row-title';
+      title.textContent = meta.label;
+
+      left.append(grip, title);
+
+      const right = document.createElement('div');
+      right.className = 'row-right';
+
+      const movers = document.createElement('span');
+      movers.className = 'row-movers';
+
+      const btnUp = document.createElement('button');
+      btnUp.type = 'button';
+      btnUp.className = 'mover-btn';
+      btnUp.title = '上移';
+      btnUp.innerHTML = UP_SVG;
+      btnUp.disabled = idx === 0;
+      btnUp.addEventListener('click', (e) => {
+        e.stopPropagation();
+        moveItem(listKey, items, idx, idx - 1);
+      });
+
+      const btnDown = document.createElement('button');
+      btnDown.type = 'button';
+      btnDown.className = 'mover-btn';
+      btnDown.title = '下移';
+      btnDown.innerHTML = DOWN_SVG;
+      btnDown.disabled = idx === items.length - 1;
+      btnDown.addEventListener('click', (e) => {
+        e.stopPropagation();
+        moveItem(listKey, items, idx, idx + 1);
+      });
+
+      movers.append(btnUp, btnDown);
+
+      const sw = document.createElement('label');
+      sw.className = 'switch switch-sm';
       const chk = document.createElement('input');
       chk.type = 'checkbox';
       chk.checked = Boolean(item.enabled);
@@ -67,30 +122,12 @@
         );
         savePatch({ [listKey]: next });
       });
+      const slider = document.createElement('span');
+      slider.className = 'slider';
+      sw.append(chk, slider);
 
-      const title = document.createElement('span');
-      title.className = 'item-title';
-      title.textContent = meta.label;
-
-      left.append(handle, chk, title);
-
-      const controls = document.createElement('div');
-      controls.className = 'item-controls';
-
-      const btnUp = document.createElement('button');
-      btnUp.className = 'btn btn-icon';
-      btnUp.textContent = '↑';
-      btnUp.disabled = idx === 0;
-      btnUp.addEventListener('click', () => moveItem(listKey, items, idx, idx - 1));
-
-      const btnDown = document.createElement('button');
-      btnDown.className = 'btn btn-icon';
-      btnDown.textContent = '↓';
-      btnDown.disabled = idx === items.length - 1;
-      btnDown.addEventListener('click', () => moveItem(listKey, items, idx, idx + 1));
-
-      controls.append(btnUp, btnDown);
-      li.append(left, controls);
+      right.append(movers, sw);
+      li.append(left, right);
 
       li.addEventListener('dragstart', () => {
         dragCtx = { listKey, fromIdx: idx };
@@ -118,21 +155,25 @@
     });
   }
 
+  function renderHudSummary(pillItems, catalog) {
+    const el = $('hudSummaryText');
+    if (!el) return;
+    const metaMap = new Map((catalog || []).map((c) => [c.id, c.label]));
+    const active = (pillItems || [])
+      .filter((x) => x && x.enabled)
+      .map((x) => metaMap.get(x.id) || x.id);
+    el.textContent = active.length > 0 ? active.join(' · ') : '未启用';
+  }
+
   function renderWeeklyEstimate(we) {
     const box = $('weeklyEstimateBody');
-    const badge = $('weeklySessionsBadge');
-    if (!we) {
-      badge.textContent = '7d';
+    const groups = Array.isArray(we?.groups) ? we.groups : [];
+    if (!we || groups.length === 0) {
       box.innerHTML = '<div class="meta">暂无数据</div>';
       return;
     }
 
-    badge.textContent = `7d · ${we.scannedSessions || 0} 会话`;
-    const estMain = we.hasExtrapolation
-      ? `≈ ${fmtTok(we.estimatedCombinedWeeklyTokens)} · ${fmtUsd(we.estimatedCombinedWeeklyCostUsd)}`
-      : '--';
-
-    const rows = (we.groups || [])
+    const rows = groups
       .map((g) => {
         const estPart = g.estimatedTotalTokens != null
           ? `≈ ${fmtTok(g.estimatedTotalTokens)} · ${fmtUsd(g.estimatedTotalCostUsd)}`
@@ -150,17 +191,14 @@
       .join('');
 
     box.innerHTML = `
-      <div class="wk-summary">
-        <div class="wk-stat">
-          <div class="wk-stat-val">${fmtTok(we.actualTotalTokens7d)} · ${fmtUsd(we.actualTotalCostUsd7d)}</div>
-          <div class="wk-stat-sub">7d 实耗 · 缓存省 ${fmtUsd(we.actualCacheSavedUsd7d)}</div>
+      <div class="wk-table">
+        <div class="wk-head">
+          <span>额度类别</span>
+          <span>已消耗</span>
+          <span>周额度估算</span>
         </div>
-        <div class="wk-stat">
-          <div class="wk-stat-val">${estMain}</div>
-          <div class="wk-stat-sub">周总量推算</div>
-        </div>
+        ${rows}
       </div>
-      ${rows ? `<div class="wk-table">${rows}</div>` : ''}
     `;
   }
 
@@ -172,10 +210,10 @@
     const sub = $('statusSub');
     if (cdpStatus?.connected) {
       dot.classList.add('is-ok');
-      sub.textContent = `CDP :${cdpStatus.port}`;
+      sub.textContent = '已连接';
     } else {
       dot.classList.remove('is-ok');
-      sub.textContent = config.cdpEnabled ? `未连接 :${config.cdpPort}` : '已暂停';
+      sub.textContent = config.cdpEnabled ? '未连接' : '已暂停';
     }
 
     $('chkCdpEnabled').checked = Boolean(config.cdpEnabled);
@@ -183,7 +221,7 @@
       $('inputPort').value = String(config.cdpPort);
     }
 
-    $('btnGenerateLauncher').textContent =
+    $('btnGenerateLauncherLabel').textContent =
       platform === 'win32'
         ? '生成 Windows 启动器 (.lnk)'
         : platform === 'darwin'
@@ -197,31 +235,30 @@
     }
 
     $('versionBadge').textContent = `v${currentVersion || '1.0.0'}`;
-    if (document.activeElement !== $('inputRepoSlug')) {
-      $('inputRepoSlug').value = config.updateRepoSlug || '';
-    }
     $('chkAutoCheckUpdate').checked = Boolean(config.autoCheckUpdate);
     $('chkAutoApplyUpdate').checked = Boolean(config.autoApplyUpdate);
 
     const btnApply = $('btnApplyUpdate');
     const uText = $('updateStatusText');
     if (updateStatus?.applying) {
+      btnApply.hidden = false;
       btnApply.disabled = true;
-      uText.textContent = '更新中...';
+      uText.textContent = '更新中…';
     } else if (updateStatus?.appliedVersion) {
-      btnApply.disabled = true;
+      btnApply.hidden = true;
       uText.textContent = `已更新 v${updateStatus.appliedVersion}`;
     } else if (updateStatus?.hasUpdate) {
+      btnApply.hidden = false;
       btnApply.disabled = false;
-      uText.textContent = `v${updateStatus.latestVersion}`;
+      uText.textContent = `有新版 v${updateStatus.latestVersion}`;
     } else if (updateStatus?.error) {
-      btnApply.disabled = true;
+      btnApply.hidden = true;
       uText.textContent = updateStatus.error;
     } else if (updateStatus?.ok) {
-      btnApply.disabled = true;
-      uText.textContent = '最新';
+      btnApply.hidden = true;
+      uText.textContent = '已是最新';
     } else {
-      btnApply.disabled = true;
+      btnApply.hidden = true;
       uText.textContent = '';
     }
 
@@ -229,6 +266,7 @@
     $('selectWindowCap').value = String(config.windowCapMode);
 
     renderWeeklyEstimate(snapshot?.weeklyEstimate || null);
+    renderHudSummary(config.pillItems, catalogs?.pillItems);
     renderSortableList($('pillItemsList'), 'pillItems', config.pillItems, catalogs?.pillItems);
     renderSortableList($('popoverSectionsList'), 'popoverSections', config.popoverSections, catalogs?.popoverSections);
   }
@@ -265,9 +303,6 @@
       render();
     }
   });
-  $('btnSaveRepo').addEventListener('click', () => {
-    savePatch({ updateRepoSlug: $('inputRepoSlug').value.trim() });
-  });
   $('chkAutoCheckUpdate').addEventListener('change', (e) => {
     savePatch({ autoCheckUpdate: e.target.checked });
   });
@@ -275,13 +310,13 @@
     savePatch({ autoApplyUpdate: e.target.checked });
   });
   $('btnCheckUpdate').addEventListener('click', async () => {
-    $('updateStatusText').textContent = '检查中...';
+    $('updateStatusText').textContent = '检查中…';
     state = await api('POST', '/api/update/check', {});
     render();
   });
   $('btnApplyUpdate').addEventListener('click', async () => {
     $('btnApplyUpdate').disabled = true;
-    $('updateStatusText').textContent = '更新中...';
+    $('updateStatusText').textContent = '更新中…';
     const res = await api('POST', '/api/update/apply', {});
     if (res?.state) state = res.state;
     render();

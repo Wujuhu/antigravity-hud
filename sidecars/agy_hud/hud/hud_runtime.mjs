@@ -265,6 +265,31 @@ export function buildHudCss() {
   flex-shrink: 0;
   transform: rotate(-90deg);
 }
+#${HUD_POPOVER_ID} .agy-pop-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-top: 7px;
+  margin-top: 8px;
+  border-top: 1px solid var(--pop-divider);
+}
+#${HUD_POPOVER_ID} .agy-sidecar-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--pop-muted);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+#${HUD_POPOVER_ID} .agy-sidecar-link:hover {
+  color: var(--pop-text);
+  background: var(--pop-track);
+}
 `;
 }
 
@@ -611,7 +636,17 @@ export function buildHudInjectExpression(snapshot, config) {
       if (blocks.length === 0) {
         blocks.push('<div class="agy-sec agy-muted">无显示区块</div>');
       }
-      return blocks.join('');
+      var foot =
+        '<div class="agy-pop-foot">' +
+          '<a class="agy-sidecar-link" href="sidecar://agy-hud/agy_hud/" data-agy-action="open-sidecar" title="打开右侧 AGY HUD 边栏">' +
+            '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<rect x="2" y="2.5" width="12" height="11" rx="2"/>' +
+              '<line x1="10" y1="2.5" x2="10" y2="13.5"/>' +
+            '</svg>' +
+            '<span>侧边栏</span>' +
+          '</a>' +
+        '</div>';
+      return blocks.join('') + foot;
     }
 
     function positionPopover(pillEl, popEl) {
@@ -667,6 +702,39 @@ export function buildHudInjectExpression(snapshot, config) {
       pillEl.addEventListener('mouseleave', scheduleClose);
       popEl.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
       popEl.addEventListener('mouseleave', scheduleClose);
+      if (!popEl.__agyHudClickBound) {
+        popEl.__agyHudClickBound = true;
+        popEl.addEventListener('click', function(ev) {
+          var link = ev.target && ev.target.closest ? ev.target.closest('[data-agy-action="open-sidecar"]') : null;
+          if (!link) return;
+          popEl.classList.remove('is-visible');
+
+          // 1. Prefer clicking an already-rendered host tab/button for AGY HUD
+          var hostBtns = document.querySelectorAll('button, [role="tab"]');
+          for (var i = 0; i < hostBtns.length; i++) {
+            var btn = hostBtns[i];
+            if (popEl.contains(btn) || (pillEl && pillEl.contains(btn))) continue;
+            var txt = (btn.textContent || '').trim();
+            var lbl = (btn.getAttribute('aria-label') || btn.getAttribute('title') || '').trim();
+            if (txt === 'AGY HUD' || lbl === 'AGY HUD' || lbl.indexOf('AGY HUD') !== -1) {
+              ev.preventDefault();
+              btn.click();
+              return;
+            }
+          }
+
+          // 2. Next, reuse any native sidecar:// pill rendered by Antigravity in the page
+          var nativeLinks = document.querySelectorAll('a[href^="sidecar://agy-hud/"]');
+          for (var j = 0; j < nativeLinks.length; j++) {
+            var nl = nativeLinks[j];
+            if (nl === link || popEl.contains(nl)) continue;
+            ev.preventDefault();
+            nl.click();
+            return;
+          }
+          // 3. Otherwise allow native <a href="sidecar://agy-hud/agy_hud/"> click to bubble to host handler
+        });
+      }
 
       if (!window.__agyHudGlobalEscBound) {
         window.__agyHudGlobalEscBound = true;

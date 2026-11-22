@@ -8,90 +8,127 @@
 </head>
 <body>
   <div class="shell">
-    <header class="topbar">
-      <div class="brand">
-        <span class="brand-dot" id="statusDot"></span>
-        <h1>AGY HUD</h1>
-        <span class="meta" id="statusSub">:9229</span>
-      </div>
-      <button class="btn" id="btnRefresh">刷新</button>
-    </header>
-
     <!-- 1. 周额度估算（仅打开本面板时按需计算） -->
-    <section class="card">
-      <div class="card-head">
+    <section class="panel-group">
+      <div class="group-head">
         <h2>周额度估算</h2>
-        <span class="meta" id="weeklySessionsBadge">7d</span>
+        <button class="btn-icon-text" id="btnRefresh" type="button" title="刷新数据">
+          <svg viewBox="0 0 16 16" width="11.5" height="11.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M13.5 8a5.5 5.5 0 1 1-1.35-3.62" />
+            <path d="M13.5 2.5v2.75h-2.75" />
+          </svg>
+          <span>刷新</span>
+        </button>
       </div>
-      <div id="weeklyEstimateBody" class="stack"></div>
+      <div id="weeklyEstimateBody" class="weekly-body"></div>
     </section>
 
-    <!-- 2. CDP 与启动器 -->
-    <section class="card">
-      <div class="card-head">
-        <h2>CDP</h2>
-        <div class="inline-group">
+    <!-- 2. HUD 数据与顺序（默认收起，点击展开） -->
+    <details class="panel-group fold" id="hudConfigDetails">
+      <summary class="fold-head">
+        <h2>HUD 数据与顺序</h2>
+        <div class="fold-right">
+          <span class="meta fold-summary-text" id="hudSummaryText">上下文 · 速率 · 额度</span>
+          <svg class="fold-chevron" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 3.5L10.5 8L6 12.5" />
+          </svg>
+        </div>
+      </summary>
+
+      <div class="fold-body">
+        <div class="toolbar-row">
+          <div class="select-pair">
+            <select id="selectCtxFormat" aria-label="上下文格式">
+              <option value="percent">上下文 · 占比</option>
+              <option value="tokens">上下文 · Token</option>
+              <option value="both">上下文 · 全部</option>
+            </select>
+            <select id="selectWindowCap" aria-label="窗口上限">
+              <option value="auto">上限 · 自动</option>
+              <option value="256000">上限 · 256k</option>
+              <option value="512000">上限 · 512k</option>
+              <option value="1048576">上限 · 1M</option>
+            </select>
+          </div>
+          <button class="btn-text" id="btnReset" type="button">重置</button>
+        </div>
+
+        <div class="list-block">
+          <div class="sub-label">输入栏胶囊</div>
+          <ul class="clean-list" id="pillItemsList"></ul>
+        </div>
+
+        <div class="list-block">
+          <div class="sub-label">悬停详情卡</div>
+          <ul class="clean-list" id="popoverSectionsList"></ul>
+        </div>
+      </div>
+    </details>
+
+    <!-- 3. 更新（默认绑定官方云端仓库） -->
+    <section class="panel-group">
+      <div class="group-head">
+        <div class="title-inline">
+          <h2>更新</h2>
+          <span class="ver-tag" id="versionBadge">v1.0.0</span>
+          <span class="meta" id="updateStatusText"></span>
+        </div>
+        <div class="action-inline">
+          <button class="btn-subtle" id="btnCheckUpdate" type="button">检查更新</button>
+          <button class="btn-accent" id="btnApplyUpdate" type="button" hidden>立即更新</button>
+        </div>
+      </div>
+      <div class="toggle-strip">
+        <label class="toggle-item">
+          <span>定时自动检查</span>
+          <span class="switch switch-sm">
+            <input type="checkbox" id="chkAutoCheckUpdate" checked />
+            <span class="slider"></span>
+          </span>
+        </label>
+        <label class="toggle-item">
+          <span>发现新版自动更新</span>
+          <span class="switch switch-sm">
+            <input type="checkbox" id="chkAutoApplyUpdate" />
+            <span class="slider"></span>
+          </span>
+        </label>
+      </div>
+    </section>
+
+    <!-- 4. CDP（放到最后） -->
+    <section class="panel-group">
+      <div class="group-head">
+        <div class="title-inline">
+          <span class="status-dot" id="statusDot"></span>
+          <h2>CDP 注入</h2>
+          <span class="meta" id="statusSub"></span>
+        </div>
+        <div class="action-inline">
           <input id="inputPort" type="number" min="1024" max="65535" value="9229" aria-label="CDP Port" />
-          <button class="btn" id="btnSavePort">应用</button>
-          <label class="switch">
+          <button class="btn-subtle" id="btnSavePort" type="button">应用</button>
+          <label class="switch" title="启用或暂停 CDP 注入">
             <input type="checkbox" id="chkCdpEnabled" checked />
             <span class="slider"></span>
           </label>
         </div>
       </div>
-      <div class="launcher-row">
-        <button class="btn btn-solid" id="btnGenerateLauncher">生成启动器</button>
-        <code class="path-chip" id="launcherResult" hidden></code>
+      <div class="cdp-foot">
+        <button class="btn-row" id="btnGenerateLauncher" type="button">
+          <span class="btn-row-left">
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6.5 3.5H3.5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-3" />
+              <path d="M9 2.5h4.5V7" />
+              <path d="M13.5 2.5L7.5 8.5" />
+            </svg>
+            <span id="btnGenerateLauncherLabel">生成启动器</span>
+          </span>
+          <svg class="btn-row-arrow" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 3.5L10.5 8L6 12.5" />
+          </svg>
+        </button>
+        <div class="path-note" id="launcherResult" hidden></div>
       </div>
-    </section>
-
-    <!-- 3. 更新 -->
-    <section class="card">
-      <div class="card-head">
-        <h2>更新</h2>
-        <span class="meta" id="versionBadge">v1.0.0</span>
-      </div>
-      <div class="inline-row">
-        <input id="inputRepoSlug" type="text" placeholder="Wujuhu/antigravity-hud" aria-label="GitHub Repo" />
-        <button class="btn" id="btnSaveRepo">保存</button>
-        <button class="btn" id="btnCheckUpdate">检查</button>
-        <button class="btn btn-solid" id="btnApplyUpdate" disabled>更新</button>
-      </div>
-      <div class="update-foot">
-        <div class="check-pair">
-          <label class="chk-inline"><input type="checkbox" id="chkAutoCheckUpdate" checked /><span>自动检查</span></label>
-          <label class="chk-inline"><input type="checkbox" id="chkAutoApplyUpdate" /><span>自动更新</span></label>
-        </div>
-        <span class="meta" id="updateStatusText"></span>
-      </div>
-    </section>
-
-    <!-- 4. 自定义 HUD 数据与顺序（放在最后） -->
-    <section class="card">
-      <div class="card-head">
-        <h2>HUD 数据与顺序</h2>
-        <button class="btn btn-ghost" id="btnReset">重置</button>
-      </div>
-
-      <div class="select-row">
-        <select id="selectCtxFormat" aria-label="上下文格式">
-          <option value="percent">上下文: 24%</option>
-          <option value="tokens">上下文: 124k</option>
-          <option value="both">上下文: 24% 124k</option>
-        </select>
-        <select id="selectWindowCap" aria-label="窗口上限">
-          <option value="auto">上限: 自动</option>
-          <option value="256000">上限: 256k</option>
-          <option value="512000">上限: 512k</option>
-          <option value="1048576">上限: 1M</option>
-        </select>
-      </div>
-
-      <div class="sub-head">输入栏</div>
-      <ul class="sortable-list" id="pillItemsList"></ul>
-
-      <div class="sub-head" style="margin-top:10px">悬浮窗</div>
-      <ul class="sortable-list" id="popoverSectionsList"></ul>
     </section>
   </div>
 
