@@ -718,7 +718,7 @@ export function buildHudInjectExpression(snapshot, config) {
           var compCount = Number(ctx.compactionCount || 0);
           var compHtml = compCount > 0 ? ' · 压缩 ' + esc(compCount) + '次' : '';
           var hasAuxToggle = Boolean(document.querySelector('[data-testid="toggle-aux-sidebar"]'));
-          var sidecarTitle = hasAuxToggle ? '打开右侧 AGY HUD 侧边栏' : '进入任意对话后可打开右侧 AGY HUD 侧边栏';
+          var sidecarTitle = hasAuxToggle ? '打开/关闭右侧 AGY HUD 侧边栏' : '进入任意对话后可打开右侧 AGY HUD 侧边栏';
           var sidecarBtn =
             '<button type="button" class="agy-sidecar-icon" data-agy-action="open-sidecar" title="' + sidecarTitle + '" aria-label="' + sidecarTitle + '"' + (hasAuxToggle ? '' : ' style="opacity:0.45"') + '>' +
               '<svg viewBox="0 0 16 16" width="12.5" height="12.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -878,15 +878,21 @@ export function buildHudInjectExpression(snapshot, config) {
         }, true);
       }
 
-      // Run open sequence strictly on click (+ setTimeout 0) so the user's own mouseup/click
-      // finishes BEFORE opening Radix/Base-UI dropdowns and cannot outside-click-dismiss them!
+      // Run toggle sequence strictly on click (+ setTimeout 0) so the user's own mouseup/click
+      // finishes BEFORE opening Radix/Base-UI dropdowns and cannot outside-click-dismiss them.
+      // Keep the popover open so clicking the same button again closes the sidebar immediately.
       popEl.onclick = function(ev) {
         window.__agyHudPopPointerDown = false;
         var link = ev.target && ev.target.closest ? ev.target.closest('[data-agy-action="open-sidecar"]') : null;
         if (!link) return;
         ev.preventDefault();
         ev.stopPropagation();
-        popEl.classList.remove('is-visible');
+
+        // Keep popover visible across sidebar layout shift so a second click toggles it closed cleanly
+        window.__agyHudKeepPopOpenUntil = Date.now() + 900;
+        if (!popEl.classList.contains('is-visible')) {
+          popEl.classList.add('is-visible');
+        }
 
         var opSeq = (window.__agyHudSidecarOpSeq = (window.__agyHudSidecarOpSeq || 0) + 1);
 
@@ -908,6 +914,18 @@ export function buildHudInjectExpression(snapshot, config) {
           try {
             el.click();
           } catch (e) {}
+        }
+
+        function isAgyHudPanelActive() {
+          var frames = document.querySelectorAll('iframe');
+          for (var i = 0; i < frames.length; i++) {
+            var src = String(frames[i].src || '').toLowerCase();
+            if (src.indexOf('agy-hud') !== -1 || src.indexOf('agy_hud') !== -1) {
+              var r = frames[i].getBoundingClientRect();
+              if (r.width > 40 && r.height > 40) return true;
+            }
+          }
+          return false;
         }
 
         function waitUntil(probeFn, onReady, timeoutMs, intervalMs) {
@@ -1043,6 +1061,13 @@ export function buildHudInjectExpression(snapshot, config) {
           var toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
           if (!toggleBtn) return;
           var isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+
+          // Toggle behavior: if the sidebar is already open and showing AGY HUD, close it on second click
+          if (isExpanded && isAgyHudPanelActive() && isVisible(toggleBtn)) {
+            fireClick(toggleBtn);
+            return;
+          }
+
           var panelAlreadyMounted = Boolean(
             findExistingAgyHudTab() || findVisibleExtCard() || findVisiblePlusBtn(),
           );
@@ -1082,9 +1107,12 @@ export function buildHudInjectExpression(snapshot, config) {
       function scheduleClose() {
         clearTimeout(showTimer);
         clearTimeout(hideTimer);
+        var remainHold = Math.max(0, Number(window.__agyHudKeepPopOpenUntil || 0) - Date.now());
         hideTimer = setTimeout(function() {
+          if (popEl.matches && popEl.matches(':hover')) return;
+          if (pillEl.matches && pillEl.matches(':hover')) return;
           popEl.classList.remove('is-visible');
-        }, 380);
+        }, Math.max(380, remainHold + 240));
       }
 
       pillEl.addEventListener('mouseenter', openPop);
@@ -1371,7 +1399,10 @@ export function buildHudInjectExpression(snapshot, config) {
         popEl.innerHTML = nextPopHtml;
       }
       bindHoverEvents(pillEl, popEl);
-      if (popEl.classList.contains('is-visible')) {
+      var lockPos =
+        Date.now() < Number(window.__agyHudKeepPopOpenUntil || 0) ||
+        (popEl.matches && popEl.matches(':hover'));
+      if (popEl.classList.contains('is-visible') && !lockPos) {
         positionPopover(pillEl, popEl);
       }
       return true;
