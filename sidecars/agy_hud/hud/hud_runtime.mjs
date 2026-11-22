@@ -903,7 +903,10 @@ export function buildHudInjectExpression(snapshot, config) {
         function isVisible(el) {
           if (!el || !el.getBoundingClientRect) return false;
           var r = el.getBoundingClientRect();
-          return r.width > 0 && r.height > 0;
+          if (!(r.width > 0 && r.height > 0)) return false;
+          var vw = window.innerWidth || 9999;
+          var vh = window.innerHeight || 9999;
+          return r.right > 0 && r.left < vw && r.bottom > 0 && r.top < vh;
         }
 
         function fireClick(el) {
@@ -1059,28 +1062,27 @@ export function buildHudInjectExpression(snapshot, config) {
         setTimeout(function() {
           if (!isCurrent()) return;
           var toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
-          if (!toggleBtn) return;
+          if (!toggleBtn || !isVisible(toggleBtn)) return;
           var isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
 
-          // Toggle behavior: if the sidebar is already open and showing AGY HUD, close it on second click
-          if (isExpanded && isAgyHudPanelActive() && isVisible(toggleBtn)) {
-            fireClick(toggleBtn);
+          if (isExpanded) {
+            if (isAgyHudPanelActive()) {
+              // 1. Sidebar is open and already showing AGY HUD -> close it on second click
+              fireClick(toggleBtn);
+            } else {
+              // 2. Sidebar is open on another tab or new-tab view -> switch to / open AGY HUD
+              selectOrAddAgyHudTab();
+            }
             return;
           }
 
-          var panelAlreadyMounted = Boolean(
-            findExistingAgyHudTab() || findVisibleExtCard() || findVisiblePlusBtn(),
-          );
-
-          if (!isExpanded && !panelAlreadyMounted && isVisible(toggleBtn)) {
-            fireClick(toggleBtn);
-            setTimeout(function() {
-              if (isCurrent()) selectOrAddAgyHudTab();
-            }, 80);
-            return;
-          }
-
-          selectOrAddAgyHudTab();
+          // 3. Sidebar is collapsed -> ALWAYS expand it first (collapsed DOM tabs may still have non-zero width)
+          fireClick(toggleBtn);
+          setTimeout(function() {
+            if (!isCurrent()) return;
+            if (isAgyHudPanelActive()) return;
+            selectOrAddAgyHudTab();
+          }, 120);
         }, 0);
       };
 
