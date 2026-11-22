@@ -28,6 +28,7 @@ import {
   buildWeeklyQuotaEstimates,
   scanWeeklyLocalUsage,
 } from './backend/weekly_usage.mjs';
+import { createQuotaAnchorStore } from './backend/quota_anchors.mjs';
 import {
   applyPluginUpdate,
   checkForUpdates,
@@ -42,6 +43,7 @@ const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 const configStore = createConfigStore();
 const quotaClient = createQuotaClient();
+const quotaAnchorStore = createQuotaAnchorStore(configStore.dataDir);
 
 let activeConversationId = '';
 let latestSnapshot = null;
@@ -82,6 +84,12 @@ async function syncOnce({ forceQuota = false } = {}) {
       includeWeeklyEstimate: false,
     });
     latestSnapshot = snapshot;
+
+    // O(1) in-memory anchor check (never reads transcript logs) so ad-hoc/natural
+    // quota resets are captured immediately even while the sidecar panel is closed.
+    if (snapshot?.quota?.available && Array.isArray(snapshot.quota.groups)) {
+      quotaAnchorStore.observe(snapshot.quota.groups);
+    }
 
     if (config.cdpEnabled) {
       const expr = buildHudInjectExpression(snapshot, config);
@@ -199,11 +207,14 @@ function buildStatePayload({ includeWeekly = false, forceWeekly = false } = {}) 
   let weeklyEstimate = null;
   if (includeWeekly) {
     // On-demand calculation: runs ONLY when the sidecar UI panel is open and querying
-    const weeklyUsage = scanWeeklyLocalUsage({ force: forceWeekly });
-    weeklyEstimate = buildWeeklyQuotaEstimates(
-      weeklyUsage,
-      latestSnapshot?.quota?.groups || [],
-    );
+    const quotaGroups = latestSnapshot?.quota?.groups || [];
+    const anchors = quotaAnchorStore.observe(quotaGroups);
+    const weeklyUsage = scanWeeklyLocalUsage({
+      anchors,
+      quotaGroups,
+      force: forceWeekly,
+    });
+    weeklyEstimate = buildWeeklyQuotaEstimates(weeklyUsage, quotaGroups, anchors);
   }
   return {
     platform: process.platform,

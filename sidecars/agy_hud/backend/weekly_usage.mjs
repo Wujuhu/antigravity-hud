@@ -1,5 +1,11 @@
 /**
- * Weekly (7-day) token & API-equivalent cost estimator + weekly quota total extrapolator.
+ * Weekly token & API-equivalent cost estimator + cycle-aligned quota extrapolator.
+ *
+ * Supports:
+ *   - Precise floating-point quota fraction accounting (`remainingFraction`)
+ *   - Threshold >= 1% net quota change (`deltaUsed >= 0.01`)
+ *   - Per-group cycle anchors that simultaneously handle scheduled natural resets,
+ *     ad-hoc official manual resets, and partial quota top-ups.
  *
  * Model rate table adapted from ahmetdotsh/agy-usage (usage_reader.mjs, MIT License)
  * and aishadiaodeqishui/agy-monitor (telemetry.mjs, MIT License).
@@ -8,10 +14,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { findAppDataDirs } from './analyzer.mjs';
+import { SEVEN_DAYS_MS } from './quota_anchors.mjs';
 
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-const MIN_USED_FRACTION_FOR_EXTRAPOLATION = 0.05; // Require >= 5% weekly usage before extrapolating
-const MAX_USED_FRACTION_FOR_EXTRAPOLATION = 0.995;
+export const MIN_USED_FRACTION_FOR_EXTRAPOLATION = 0.01; // >= 1% net quota change triggers estimation
+const MAX_USED_FRACTION_FOR_EXTRAPOLATION = 0.999;
 
 // Standard (non-promotional) API-equivalent rates in USD per 1M tokens
 export const RATE_TABLE = {
@@ -48,7 +54,6 @@ const EFFORT_SUFFIX_RE = /-(?:extra-low|low|medium|high|xhigh|max|extra|tiered|t
 export function normalizeModelRateKey(rawModel = '') {
   let slug = String(rawModel || '').trim().toLowerCase().replace(/^models\//, '');
   if (!slug) return '';
-  // Strip stacked effort/mode suffixes
   for (let i = 0; i < 3; i++) {
     const next = slug.replace(EFFORT_SUFFIX_RE, '');
     if (next === slug) break;
@@ -68,7 +73,6 @@ export function resolveModelRates(rawModel = '') {
     }
   }
 
-  // Family-level fallbacks
   if (slug.includes('argon') || slug.includes('carbon') || slug.includes('opus')) {
     return { inPerM: 4, outPerM: 20, crPerM: 0.2 };
   }
@@ -116,9 +120,10 @@ export function estimateTurnCostUsd(modelId, uncachedInput = 0, cacheRead = 0, o
 }
 
 /**
- * Aggregate a list of transcript step records within [cutoffMs, nowMs].
+ * Aggregate transcript steps using either a uniform cutoffMs or per-group cutoff timestamps.
+ * `groupCutoffs` maps quota group key -> cycleStartMs (for cycle-aligned delta counting).
  */
-export function aggregateWeeklySteps(steps = [], cutoffMs = 0) {
+export function aggregateWeeklySteps(steps = [], defaultCutoffMs = 0, groupCutoffs = null) {
   const groups = {
     gemini: { tokens: 0, uncachedInput: 0, cacheRead: 0, output: 0, costUsd: 0, cacheSavedUsd: 0, turns: 0 },
     gpt_claude: { tokens: 0, uncachedInput: 0, cacheRead: 0, output: 0, costUsd: 0, cacheSavedUsd: 0, turns: 0 },
@@ -136,7 +141,6 @@ export function aggregateWeeklySteps(steps = [], cutoffMs = 0) {
   for (const step of steps) {
     if (!step || step.type !== 'PLANNER_RESPONSE') continue;
     const ts = step.created_at ? Date.parse(step.created_at) : Number.NaN;
-    if (cutoffMs > 0 && Number.isFinite(ts) && ts < cutoffMs) continue;
 
     const inTok = Math.max(0, Number(step.input_tokens || 0));
     const crTok = Math.max(0, Number(step.cache_read_tokens || 0));
@@ -146,6 +150,13 @@ export function aggregateWeeklySteps(steps = [], cutoffMs = 0) {
 
     const modelId = typeof step.model === 'string' ? step.model : '';
     const grpKey = classifyModelQuotaGroup(modelId);
+    const effectiveCutoff =
+      groupCutoffs && Number.isFinite(Number(groupCutoffs[grpKey]))
+        ? Number(groupCutoffs[grpKey])
+        : defaultCutoffMs;
+
+    if (effectiveCutoff > 0 && Number.isFinite(ts) && ts < effectiveCutoff) continue;
+
     const { costUsd, cacheSavedUsd } = estimateTurnCostUsd(modelId, inTok, crTok, outTok);
 
     const g = groups[grpKey];
@@ -183,9 +194,9 @@ export function aggregateWeeklySteps(steps = [], cutoffMs = 0) {
   };
 }
 
-// Per-file mtime+size cache to keep 7-day scans near-instant
 const fileStepsCache = new Map();
 let cachedWeeklySnapshot = null;
+let cachedWeeklySig = '';
 let cachedWeeklyAtMs = 0;
 
 function readTranscriptStepsCached(filePath) {
@@ -213,7 +224,7 @@ function readTranscriptStepsCached(filePath) {
           });
         }
       } catch {
-        // Ignore partial line
+        // Ignore partial line while file is being appended
       }
     }
     fileStepsCache.set(filePath, { sig, steps });
@@ -227,21 +238,56 @@ function readTranscriptStepsCached(filePath) {
   }
 }
 
+export function resolveGroupCutoffs(anchors = {}, quotaGroups = [], nowMs = Date.now()) {
+  const defaultCutoff = nowMs - SEVEN_DAYS_MS;
+  const cutoffs = {
+    gemini: defaultCutoff,
+    gpt_claude: defaultCutoff,
+    argon: defaultCutoff,
+  };
+
+  for (const grp of quotaGroups || []) {
+    const key = grp?.key;
+    if (!key) continue;
+    const anc = anchors?.[key];
+    if (anc && Number.isFinite(Number(anc.cycleStartMs)) && Number(anc.cycleStartMs) > 0) {
+      cutoffs[key] = Number(anc.cycleStartMs);
+      continue;
+    }
+    const wk = grp?.weekly;
+    const resetMs =
+      wk && Number.isFinite(Number(wk.resetTimeMs)) && Number(wk.resetTimeMs) > 0
+        ? Number(wk.resetTimeMs)
+        : wk && Number.isFinite(Number(wk.remainingMs)) && Number(wk.remainingMs) > 0
+          ? nowMs + Number(wk.remainingMs)
+          : null;
+    if (resetMs !== null && resetMs - SEVEN_DAYS_MS <= nowMs) {
+      cutoffs[key] = resetMs - SEVEN_DAYS_MS;
+    }
+  }
+
+  return cutoffs;
+}
+
 /**
- * Scan local Antigravity brain directories for the last 7 days of usage.
+ * Scan local Antigravity brain directories aligned to per-group cycle anchors.
  */
 export function scanWeeklyLocalUsage({
   appDataDirs = null,
+  anchors = {},
+  quotaGroups = [],
   nowMs = Date.now(),
   ttlMs = 60_000,
   force = false,
 } = {}) {
-  if (!force && cachedWeeklySnapshot && nowMs - cachedWeeklyAtMs < ttlMs) {
+  const groupCutoffs = resolveGroupCutoffs(anchors, quotaGroups, nowMs);
+  const cutoffSig = JSON.stringify(groupCutoffs);
+  if (!force && !appDataDirs && cachedWeeklySnapshot && cachedWeeklySig === cutoffSig && nowMs - cachedWeeklyAtMs < ttlMs) {
     return cachedWeeklySnapshot;
   }
 
   const dirs = Array.isArray(appDataDirs) ? appDataDirs : findAppDataDirs();
-  const cutoffMs = nowMs - SEVEN_DAYS_MS;
+  const minCutoffMs = Math.min(nowMs - SEVEN_DAYS_MS, ...Object.values(groupCutoffs));
   const collectedSteps = [];
   let scannedSessions = 0;
 
@@ -269,64 +315,98 @@ export function scanWeeklyLocalUsage({
       } catch {
         continue;
       }
-      if (stat.mtimeMs < cutoffMs) continue;
+      if (stat.mtimeMs < minCutoffMs) continue;
       scannedSessions += 1;
       const fileSteps = readTranscriptStepsCached(transcriptPath);
       for (const s of fileSteps) collectedSteps.push(s);
     }
   }
 
-  const agg = aggregateWeeklySteps(collectedSteps, cutoffMs);
+  const agg = aggregateWeeklySteps(collectedSteps, nowMs - SEVEN_DAYS_MS, groupCutoffs);
   const result = {
     windowDays: 7,
     scannedSessions,
     scannedAtMs: nowMs,
+    groupCutoffs,
     ...agg,
   };
 
   if (!appDataDirs) {
     cachedWeeklySnapshot = result;
+    cachedWeeklySig = cutoffSig;
     cachedWeeklyAtMs = nowMs;
   }
   return result;
 }
 
+function resolvePreciseFraction(wk) {
+  if (!wk || typeof wk !== 'object') return null;
+  if (wk.remainingFraction != null && Number.isFinite(Number(wk.remainingFraction))) {
+    return Math.max(0, Math.min(1, Number(wk.remainingFraction)));
+  }
+  if (wk.remainingPctExact != null && Number.isFinite(Number(wk.remainingPctExact))) {
+    return Math.max(0, Math.min(1, Number(wk.remainingPctExact) / 100));
+  }
+  if (wk.remainingPct != null && Number.isFinite(Number(wk.remainingPct))) {
+    return Math.max(0, Math.min(1, Number(wk.remainingPct) / 100));
+  }
+  return null;
+}
+
 /**
- * Combine 7-day actual local usage with live weekly quota remaining fractions
- * to extrapolate estimated weekly total token & USD capacity per group.
+ * Combine cycle-aligned local consumption with high-precision floating-point
+ * quota deltas (`deltaUsed = anchorFraction - currentFraction`) to extrapolate
+ * estimated full weekly token & USD capacity per group.
+ *
+ * Triggers whenever net quota change >= 1% (`deltaUsed >= 0.01`).
  */
-export function buildWeeklyQuotaEstimates(weeklyUsage, quotaGroups = []) {
+export function buildWeeklyQuotaEstimates(weeklyUsage, quotaGroups = [], anchors = {}) {
   const byGroup = weeklyUsage?.byGroup || {};
   const groupEstimates = [];
 
   for (const grp of quotaGroups || []) {
     const actual = byGroup[grp.key] || { tokens: 0, costUsd: 0, cacheSavedUsd: 0, turns: 0 };
     const wk = grp.weekly;
-    const remPct = wk && wk.remainingPct != null ? Number(wk.remainingPct) : null;
-    const usedFrac = remPct != null ? Math.max(0, Math.min(1, (100 - remPct) / 100)) : null;
+    const currentFrac = resolvePreciseFraction(wk);
+    const anc = anchors?.[grp.key] || null;
+    const anchorFrac =
+      anc && Number.isFinite(Number(anc.anchorFraction))
+        ? Math.max(0, Math.min(1, Number(anc.anchorFraction)))
+        : 1.0;
+
+    const deltaUsedFrac =
+      currentFrac !== null
+        ? Math.max(0, Math.min(1, anchorFrac - currentFrac))
+        : null;
 
     let estimatedTotalTokens = null;
     let estimatedTotalCostUsd = null;
     let confidence = 'insufficient';
 
     if (
-      usedFrac !== null &&
-      usedFrac >= MIN_USED_FRACTION_FOR_EXTRAPOLATION &&
-      usedFrac <= MAX_USED_FRACTION_FOR_EXTRAPOLATION &&
+      deltaUsedFrac !== null &&
+      deltaUsedFrac >= MIN_USED_FRACTION_FOR_EXTRAPOLATION &&
+      deltaUsedFrac <= MAX_USED_FRACTION_FOR_EXTRAPOLATION &&
       actual.tokens > 0
     ) {
-      estimatedTotalTokens = Math.round(actual.tokens / usedFrac);
-      estimatedTotalCostUsd = Number((actual.costUsd / usedFrac).toFixed(2));
-      confidence = usedFrac >= 0.15 ? 'medium' : 'low';
+      estimatedTotalTokens = Math.round(actual.tokens / deltaUsedFrac);
+      estimatedTotalCostUsd = Number((actual.costUsd / deltaUsedFrac).toFixed(2));
+      confidence = deltaUsedFrac >= 0.1 ? 'high' : deltaUsedFrac >= 0.03 ? 'medium' : 'low';
     }
+
+    const deltaUsedPctExact =
+      deltaUsedFrac !== null ? Number((deltaUsedFrac * 100).toFixed(1)) : null;
 
     groupEstimates.push({
       key: grp.key,
       label: grp.label,
       actualTokens7d: actual.tokens,
       actualCostUsd7d: Number(Number(actual.costUsd || 0).toFixed(2)),
-      weeklyRemainingPct: remPct,
-      weeklyUsedPct: usedFrac !== null ? Math.round(usedFrac * 100) : null,
+      weeklyRemainingPct: currentFrac !== null ? Number((currentFrac * 100).toFixed(1)) : null,
+      weeklyUsedPct: deltaUsedPctExact,
+      deltaUsedFraction: deltaUsedFrac !== null ? Number(deltaUsedFrac.toFixed(6)) : null,
+      anchorFraction: anchorFrac,
+      anchorReason: anc?.reason || 'natural_window',
       estimatedTotalTokens,
       estimatedTotalCostUsd,
       confidence,

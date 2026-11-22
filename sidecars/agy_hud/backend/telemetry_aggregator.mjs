@@ -94,38 +94,44 @@ function normalizeGroupBuckets(g) {
   const out = [];
   const rawBuckets = Array.isArray(g.buckets) && g.buckets.length > 0 ? g.buckets : null;
 
+  const mapBucket = (b, fallbackWindow, fallbackLabel) => {
+    const win = b.window || fallbackWindow;
+    return {
+      window: win,
+      label: formatBucketLabel({ ...b, window: win }) || fallbackLabel,
+      remainingFraction:
+        b.remainingFraction != null && Number.isFinite(Number(b.remainingFraction))
+          ? Number(b.remainingFraction)
+          : b.remainingPctExact != null && Number.isFinite(Number(b.remainingPctExact))
+            ? Number(b.remainingPctExact) / 100
+            : b.remainingPct != null && Number.isFinite(Number(b.remainingPct))
+              ? Number(b.remainingPct) / 100
+              : null,
+      remainingPct: b.remainingPct ?? null,
+      remainingPctExact:
+        b.remainingPctExact != null && Number.isFinite(Number(b.remainingPctExact))
+          ? Number(b.remainingPctExact)
+          : b.remainingFraction != null && Number.isFinite(Number(b.remainingFraction))
+            ? Math.round(Number(b.remainingFraction) * 1000) / 10
+            : b.remainingPct ?? null,
+      remainingMs: b.remainingMs ?? null,
+      resetTime: b.resetTime || '',
+      resetTimeMs: b.resetTimeMs ?? (b.resetTime ? (Number.isFinite(Date.parse(b.resetTime)) ? Date.parse(b.resetTime) : null) : null),
+      isFull: Boolean(b.isFull),
+    };
+  };
+
   if (rawBuckets) {
     for (const b of rawBuckets) {
       if (!b || b.disabled) continue;
-      out.push({
-        window: b.window || 'other',
-        label: formatBucketLabel(b),
-        remainingPct: b.remainingPct ?? null,
-        remainingMs: b.remainingMs ?? null,
-        resetTime: b.resetTime || '',
-        isFull: Boolean(b.isFull),
-      });
+      out.push(mapBucket(b, 'other', '额度'));
     }
   } else {
     if (g.fiveHour) {
-      out.push({
-        window: '5h',
-        label: '5h',
-        remainingPct: g.fiveHour.remainingPct ?? null,
-        remainingMs: g.fiveHour.remainingMs ?? null,
-        resetTime: g.fiveHour.resetTime || '',
-        isFull: Boolean(g.fiveHour.isFull),
-      });
+      out.push(mapBucket(g.fiveHour, '5h', '5h'));
     }
     if (g.weekly) {
-      out.push({
-        window: 'weekly',
-        label: '周',
-        remainingPct: g.weekly.remainingPct ?? null,
-        remainingMs: g.weekly.remainingMs ?? null,
-        resetTime: g.weekly.resetTime || '',
-        isFull: Boolean(g.weekly.isFull),
-      });
+      out.push(mapBucket(g.weekly, 'weekly', '周'));
     }
   }
 
