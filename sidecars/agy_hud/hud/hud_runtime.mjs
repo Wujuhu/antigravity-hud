@@ -16,9 +16,9 @@ export const HUD_STYLE_ID = 'agy-hud-injected-style';
 export function buildHudCss() {
   return `
 #${HUD_ROOT_ID} {
-  --hud-bg: rgba(255, 255, 255, 0.05);
-  --hud-bg-hover: rgba(255, 255, 255, 0.1);
-  --hud-border: rgba(255, 255, 255, 0.1);
+  --hud-bg: transparent;
+  --hud-bg-hover: rgba(255, 255, 255, 0.08);
+  --hud-border: rgba(255, 255, 255, 0.16);
   --hud-text: #e2e4e9;
   --hud-muted: #8b909a;
   --hud-sep: rgba(255, 255, 255, 0.22);
@@ -33,8 +33,8 @@ export function buildHudCss() {
   padding: 0 9px;
   margin-right: 6px;
   border-radius: 999px;
-  background: var(--hud-bg);
-  border: 1px solid var(--hud-border);
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--hud-text);
   font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 11.5px;
@@ -44,17 +44,17 @@ export function buildHudCss() {
   cursor: default;
   user-select: none;
   flex-shrink: 0;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition: background 140ms ease, border-color 140ms ease;
   box-sizing: border-box;
 }
 #${HUD_ROOT_ID}:hover {
   background: var(--hud-bg-hover);
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: var(--hud-border);
 }
 #${HUD_ROOT_ID}[data-agy-theme="light"] {
-  --hud-bg: rgba(0, 0, 0, 0.035);
-  --hud-bg-hover: rgba(0, 0, 0, 0.07);
-  --hud-border: rgba(0, 0, 0, 0.1);
+  --hud-bg: transparent;
+  --hud-bg-hover: rgba(0, 0, 0, 0.055);
+  --hud-border: rgba(0, 0, 0, 0.16);
   --hud-text: #18191b;
   --hud-muted: #6b707a;
   --hud-sep: rgba(0, 0, 0, 0.2);
@@ -64,7 +64,8 @@ export function buildHudCss() {
   --hud-danger: #c5221f;
 }
 #${HUD_ROOT_ID}[data-agy-theme="light"]:hover {
-  border-color: rgba(0, 0, 0, 0.2);
+  background: var(--hud-bg-hover);
+  border-color: var(--hud-border);
 }
 #${HUD_ROOT_ID} .agy-hud-seg {
   display: inline-flex;
@@ -103,7 +104,7 @@ export function buildHudCss() {
   --pop-danger: #e06c75;
   position: fixed;
   z-index: 2147483000;
-  width: 344px;
+  width: 360px;
   max-width: calc(100vw - 24px);
   padding: 12px 14px;
   border-radius: 10px;
@@ -249,15 +250,31 @@ export function buildHudCss() {
 }
 #${HUD_POPOVER_ID} .agy-quota-buckets {
   display: grid;
-  grid-template-columns: 102px 88px;
+  grid-template-columns: 112px 108px;
   align-items: center;
-  gap: 4px 8px;
+  gap: 4px 10px;
 }
 #${HUD_POPOVER_ID} .agy-q-bucket {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 14px 16px 31px 1fr;
   align-items: center;
-  gap: 4px;
+  column-gap: 4px;
   white-space: nowrap;
+}
+#${HUD_POPOVER_ID} .agy-q-lbl {
+  color: var(--pop-muted);
+  font-size: 11px;
+  text-align: center;
+}
+#${HUD_POPOVER_ID} .agy-q-pct {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+#${HUD_POPOVER_ID} .agy-q-dur {
+  color: var(--pop-muted);
+  font-size: 11px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
 }
 #${HUD_POPOVER_ID} .agy-q-ring {
   width: 14px;
@@ -290,22 +307,25 @@ export function buildHudCss() {
   background: var(--pop-track);
 }
 
-/* Per-turn summary bar placed cleanly above each turn's feedback toolbar (responsive wrap) */
-.agy-turn-summary-bar {
+/* Per-turn summary inline with the host feedback toolbar (aligned left, actions right, responsive wrap) */
+[data-testid="cascade-system-message-toolbar"] > div:has(> .agy-turn-summary-bar) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  gap: 4px 10px;
+}
+.agy-turn-summary-bar {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 3px 6px;
-  width: 100%;
-  max-width: 100%;
-  margin: 6px 0 3px;
-  padding: 4px 0 2px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-right: auto;
+  padding-left: 4px;
   font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 12px;
+  line-height: 1.45;
   font-variant-numeric: tabular-nums;
-  color: rgba(232, 234, 237, 0.62);
+  color: rgba(232, 234, 237, 0.64);
   box-sizing: border-box;
   user-select: text;
 }
@@ -317,39 +337,38 @@ export function buildHudCss() {
   color: rgba(0, 0, 0, 0.22);
 }
 .agy-turn-summary-bar[data-agy-theme="light"] {
-  border-top-color: rgba(0, 0, 0, 0.07);
-  color: rgba(24, 25, 27, 0.6);
+  color: rgba(24, 25, 27, 0.62);
 }
 .agy-turn-summary-bar .agy-turn-item {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   white-space: nowrap;
 }
 .agy-turn-summary-bar .agy-turn-model {
-  color: rgba(232, 234, 237, 0.88);
+  color: rgba(232, 234, 237, 0.9);
   font-weight: 500;
 }
 .agy-turn-summary-bar[data-agy-theme="light"] .agy-turn-model {
-  color: rgba(24, 25, 27, 0.88);
+  color: rgba(24, 25, 27, 0.9);
 }
 .agy-turn-summary-bar .agy-turn-effort {
   padding: 0 5px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.07);
-  color: rgba(232, 234, 237, 0.78);
-  font-size: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(232, 234, 237, 0.8);
+  font-size: 10.5px;
   line-height: 1.5;
 }
 .agy-turn-summary-bar[data-agy-theme="light"] .agy-turn-effort {
   background: rgba(0, 0, 0, 0.06);
-  color: rgba(24, 25, 27, 0.76);
+  color: rgba(24, 25, 27, 0.78);
 }
 .agy-turn-summary-bar .agy-turn-val {
-  color: rgba(232, 234, 237, 0.84);
+  color: rgba(232, 234, 237, 0.85);
 }
 .agy-turn-summary-bar[data-agy-theme="light"] .agy-turn-val {
-  color: rgba(24, 25, 27, 0.84);
+  color: rgba(24, 25, 27, 0.85);
 }
 
 /* Optional compact layout rules adapted from WhiteBr1ck/agy-powertools (MIT License) */
@@ -743,9 +762,9 @@ export function buildHudInjectExpression(snapshot, config) {
                 bucketHtml +=
                   '<span class="agy-q-bucket">' +
                     makeRingSvg('agy-q-ring', bPct != null ? bPct : 0, quotaRingColor(bPct), 'var(--pop-track)') +
-                    '<span class="agy-muted">' + esc(bLbl) + '</span>' +
-                    '<span>' + (bPct != null ? esc(bPct) + '%' : '--') + '</span>' +
-                    (bDur ? '<span class="agy-muted">' + esc(bDur) + '</span>' : '') +
+                    '<span class="agy-q-lbl">' + esc(bLbl) + '</span>' +
+                    '<span class="agy-q-pct">' + (bPct != null ? esc(bPct) + '%' : '--') + '</span>' +
+                    '<span class="agy-q-dur">' + (bDur ? esc(bDur) : '') + '</span>' +
                   '</span>';
               }
               var activeDot = '<span class="agy-dot" style="background:var(--pop-accent)"></span>';
@@ -830,32 +849,94 @@ export function buildHudInjectExpression(snapshot, config) {
         popEl.addEventListener('click', function(ev) {
           var link = ev.target && ev.target.closest ? ev.target.closest('[data-agy-action="open-sidecar"]') : null;
           if (!link) return;
+          ev.preventDefault();
           popEl.classList.remove('is-visible');
 
-          // 1. Prefer clicking an already-rendered host tab/button for AGY HUD
-          var hostBtns = document.querySelectorAll('button, [role="tab"]');
-          for (var i = 0; i < hostBtns.length; i++) {
-            var btn = hostBtns[i];
-            if (popEl.contains(btn) || (pillEl && pillEl.contains(btn))) continue;
-            var txt = (btn.textContent || '').trim();
-            var lbl = (btn.getAttribute('aria-label') || btn.getAttribute('title') || '').trim();
-            if (txt === 'AGY HUD' || lbl === 'AGY HUD' || lbl.indexOf('AGY HUD') !== -1) {
-              ev.preventDefault();
-              btn.click();
-              return;
-            }
+          function isVisible(el) {
+            if (!el || !el.getBoundingClientRect) return false;
+            var r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0;
           }
 
-          // 2. Next, reuse any native sidecar:// pill rendered by Antigravity in the page
-          var nativeLinks = document.querySelectorAll('a[href^="sidecar://agy-hud/"]');
-          for (var j = 0; j < nativeLinks.length; j++) {
-            var nl = nativeLinks[j];
-            if (nl === link || popEl.contains(nl)) continue;
-            ev.preventDefault();
-            nl.click();
+          function findVisibleAgyHudTab() {
+            var nodes = document.querySelectorAll('button, [role="tab"], [role="menuitem"]');
+            for (var i = 0; i < nodes.length; i++) {
+              var n = nodes[i];
+              if (popEl.contains(n) || (pillEl && pillEl.contains(n))) continue;
+              if (!isVisible(n)) continue;
+              var txt = (n.textContent || '').trim();
+              var lbl = (n.getAttribute('aria-label') || n.getAttribute('title') || '').trim();
+              if (txt === 'AGY HUD' || lbl === 'AGY HUD') {
+                return n;
+              }
+            }
+            return null;
+          }
+
+          function isAuxSidebarOpen() {
+            var slots = document.querySelectorAll('[data-testid="sidecar-iframe-slot"]');
+            for (var i = 0; i < slots.length; i++) {
+              if (isVisible(slots[i])) return true;
+            }
+            var auxSplit = document.querySelector('[data-testid="aux-pane-split"]');
+            if (auxSplit && auxSplit.children && auxSplit.children.length >= 2) {
+              var lastPane = auxSplit.children[auxSplit.children.length - 1];
+              if (lastPane && lastPane.getBoundingClientRect().width > 120) return true;
+            }
+            return false;
+          }
+
+          function tryOpenFromAuxPlusMenu() {
+            var tab = findVisibleAgyHudTab();
+            if (tab) {
+              tab.click();
+              return true;
+            }
+            // Look for "+" add-tab button in the top-right aux pane header
+            var btns = document.querySelectorAll('button');
+            var plusBtn = null;
+            for (var i = 0; i < btns.length; i++) {
+              var b = btns[i];
+              if (popEl.contains(b) || !isVisible(b)) continue;
+              var r = b.getBoundingClientRect();
+              if (r.top < 0 || r.top > 95 || r.left < window.innerWidth * 0.42) continue;
+              var tid = b.getAttribute('data-testid') || '';
+              if (tid === 'toggle-aux-sidebar' || tid === 'toggle-overview-panel' || tid === 'titlebar-more-actions') continue;
+              var aria = (b.getAttribute('aria-label') || b.getAttribute('title') || '').toLowerCase();
+              var txt = (b.textContent || '').trim();
+              if (txt === '+' || /add|new|open|tab|panel|sidecar|plugin/.test(aria)) {
+                plusBtn = b;
+                break;
+              }
+            }
+            if (!plusBtn) return false;
+            plusBtn.click();
+            setTimeout(function() {
+              var item = findVisibleAgyHudTab();
+              if (item) item.click();
+            }, 120);
+            return true;
+          }
+
+          // 1. If AGY HUD tab is already visible in open aux pane, focus it directly
+          var existingTab = findVisibleAgyHudTab();
+          if (existingTab) {
+            existingTab.click();
             return;
           }
-          // 3. Otherwise allow native <a href="sidecar://agy-hud/agy_hud/"> click to bubble to host handler
+
+          // 2. If aux sidebar is collapsed, toggle it open first via official host button
+          var toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
+          if (!isAuxSidebarOpen() && toggleBtn && isVisible(toggleBtn)) {
+            toggleBtn.click();
+            setTimeout(function() {
+              tryOpenFromAuxPlusMenu();
+            }, 140);
+            return;
+          }
+
+          // 3. Aux sidebar is open on another tab -> switch or add AGY HUD tab
+          tryOpenFromAuxPlusMenu();
         });
       }
 
@@ -1049,10 +1130,13 @@ export function buildHudInjectExpression(snapshot, config) {
 
       for (var i = 0; i < toolbars.length; i++) {
         var tb = toolbars[i];
-        var parent = tb.parentElement;
-        if (!parent) continue;
-        var prev = tb.previousElementSibling;
-        var bar = prev && prev.classList && prev.classList.contains('agy-turn-summary-bar') ? prev : null;
+        // Clean up any legacy sibling bar placed above the toolbar in earlier versions
+        var legacyPrev = tb.previousElementSibling;
+        if (legacyPrev && legacyPrev.classList && legacyPrev.classList.contains('agy-turn-summary-bar')) {
+          legacyPrev.remove();
+        }
+        var row = tb.querySelector(':scope > div') || tb;
+        var bar = row.querySelector(':scope > .agy-turn-summary-bar');
 
         var meta = extractToolbarStepMeta(tb);
         var turn = matchTurnForToolbar(turns, meta, i);
@@ -1066,10 +1150,12 @@ export function buildHudInjectExpression(snapshot, config) {
           continue;
         }
         if (!bar) {
-          bar = document.createElement('div');
+          bar = document.createElement('span');
           bar.className = 'agy-turn-summary-bar';
           bar.setAttribute('data-agy-turn-bar', '1');
-          parent.insertBefore(bar, tb);
+          row.prepend(bar);
+        } else if (row.firstElementChild !== bar) {
+          row.prepend(bar);
         }
         bar.setAttribute('data-agy-theme', theme);
         if (bar.getAttribute('data-agy-turn-html') !== html) {

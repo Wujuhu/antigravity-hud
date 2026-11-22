@@ -345,18 +345,22 @@ function buildTurnSummaryDemoHtml() {
 </head>
 <body>
   <div class="demo-block">
-    <div class="demo-tag">宽屏效果（默认单行完整展示）</div>
+    <div class="demo-tag">宽屏效果（与复制/点赞同行，左对齐）</div>
     <p class="demo-prose">已完成 SQLite 纳秒级纯流式 TPS 引擎接入与每轮汇总计算，所有 25 项单元测试均已通过。</p>
-    <div class="mock-tb" data-testid="cascade-system-message-toolbar">
-      <span>👍</span><span>👎</span><span>⧉ 复制</span><span>· just now</span>
+    <div data-testid="cascade-system-message-toolbar" style="display:flex;flex-direction:column;padding:0 8px;">
+      <div class="mock-tb" style="margin:0 -4px;padding-top:6px;">
+        <span>⧉</span><span>👍</span><span>👎</span><span>2m ago</span>
+      </div>
     </div>
   </div>
 
   <div class="demo-block narrow">
     <div class="demo-tag">窄屏效果（360px 侧边栏打开时自动折行，不挤压按钮）</div>
-    <p class="demo-prose">已将排版模式调整为「舒适 / 原版 / 紧凑」三档，并同步更新桌面 CDP 启动器。</p>
-    <div class="mock-tb" data-testid="cascade-system-message-toolbar">
-      <span>👍</span><span>👎</span><span>⧉ 复制</span><span>· 2m ago</span>
+    <p class="demo-prose">已将排版模式调整为「舒适 / 原版 / 紧凑」三档，并同步更新桌面 HUD 启动器。</p>
+    <div data-testid="cascade-system-message-toolbar" style="display:flex;flex-direction:column;padding:0 8px;">
+      <div class="mock-tb" style="margin:0 -4px;padding-top:6px;">
+        <span>⧉</span><span>👍</span><span>👎</span><span>2m ago</span>
+      </div>
     </div>
   </div>
 
