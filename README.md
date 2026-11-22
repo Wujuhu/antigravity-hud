@@ -71,7 +71,11 @@
 ### 启用生效
 
 1. 在 Antigravity 左侧 **Customizations → Plugins** 中开启 **AGY HUD**。
-2. 彻底退出 Antigravity（Windows 退出右下角托盘 / macOS 按 `Cmd + Q`），再用刚生成的 `Antigravity (HUD)` 启动器重新打开即可。
+2. 彻底退出 Antigravity（Windows 退出右下角托盘 / macOS 按 `Cmd + Q`），再用生成的对应启动器重新打开：
+   - **Windows**：双击桌面 `Antigravity (HUD).lnk` 快捷方式
+   - **macOS**：打开 `~/Applications/Antigravity (HUD).app` 应用文件
+
+> **提示**：以后日常启动也请始终通过对应的启动器打开 Antigravity，才能使用输入栏 HUD、悬停详情、每轮总信息栏与界面排版等完整功能。
 
 ---
 
