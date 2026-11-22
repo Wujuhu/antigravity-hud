@@ -12,6 +12,8 @@ const DEFAULT_PLUGIN_DIR = path.join(os.homedir(), '.gemini', 'config', 'plugins
 export async function uninstallPlugin({
   targetDir = DEFAULT_PLUGIN_DIR,
   dataDir = resolveDataDir(),
+  desktopDir = path.join(os.homedir(), 'Desktop'),
+  applicationsDir = path.join(os.homedir(), 'Applications'),
   purgeData = false,
   silent = false,
 } = {}) {
@@ -34,13 +36,13 @@ export async function uninstallPlugin({
   }
 
   if (process.platform === 'darwin') {
-    const macApp = path.join(os.homedir(), 'Applications', 'Antigravity (CDP).app');
+    const macApp = path.join(applicationsDir, 'Antigravity (CDP).app');
     if (purgeData && fs.existsSync(macApp)) {
       await fsp.rm(macApp, { recursive: true, force: true });
       log(`✓ 已移除 macOS 启动器: ${macApp}`);
     }
   } else if (process.platform === 'win32') {
-    const deskLnk = path.join(os.homedir(), 'Desktop', 'Antigravity (CDP).lnk');
+    const deskLnk = path.join(desktopDir, 'Antigravity (CDP).lnk');
     if (purgeData && fs.existsSync(deskLnk)) {
       await fsp.rm(deskLnk, { force: true });
       log(`✓ 已移除桌面快捷方式: ${deskLnk}`);

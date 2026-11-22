@@ -65,6 +65,10 @@
   scrollbar-color: var(--scroll-thumb) transparent;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 *::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -535,6 +539,86 @@ button {
   display: flex;
   justify-content: flex-end;
   padding-top: 2px;
+}
+
+/* Segmented Compact Presets & Range Sliders */
+.seg-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--control-bg);
+  border: 1px solid var(--hairline);
+}
+
+.seg-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11.5px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.seg-btn:hover {
+  color: var(--text);
+}
+
+.seg-btn.is-active {
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.slider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.slider-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-soft);
+}
+
+input[type="range"] {
+  width: 100%;
+  height: 4px;
+  margin: 2px 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 999px;
+  background: var(--switch-off);
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent-bg);
+  border: none;
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
 }
 
 select {

@@ -12,13 +12,7 @@
     <section class="panel-group">
       <div class="group-head">
         <h2>周额度估算</h2>
-        <button class="btn-icon-text" id="btnRefresh" type="button" title="刷新数据">
-          <svg viewBox="0 0 16 16" width="11.5" height="11.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M13.5 8a5.5 5.5 0 1 1-1.35-3.62" />
-            <path d="M13.5 2.5v2.75h-2.75" />
-          </svg>
-          <span>刷新</span>
-        </button>
+        <span class="meta" id="weeklyUpdatedAt">--</span>
       </div>
       <div id="weeklyEstimateBody" class="weekly-body"></div>
     </section>
@@ -28,7 +22,7 @@
       <summary class="fold-head">
         <h2>HUD 数据与顺序</h2>
         <div class="fold-right">
-          <span class="meta fold-summary-text" id="hudSummaryText">上下文 · 速率 · 额度</span>
+          <span class="meta fold-summary-text" id="hudSummaryText">上下文 · 速率 · 5h 额度</span>
           <svg class="fold-chevron" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M6 3.5L10.5 8L6 12.5" />
           </svg>
@@ -70,7 +64,65 @@
       </div>
     </details>
 
-    <!-- 3. 更新（默认绑定官方云端仓库） -->
+    <!-- 3. 界面排版紧凑度与每轮总信息栏（默认收起） -->
+    <details class="panel-group fold" id="layoutConfigDetails">
+      <summary class="fold-head">
+        <h2>界面排版</h2>
+        <div class="fold-right">
+          <span class="meta fold-summary-text" id="layoutSummaryText">原版</span>
+          <svg class="fold-chevron" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 3.5L10.5 8L6 12.5" />
+          </svg>
+        </div>
+      </summary>
+
+      <div class="fold-body">
+        <div class="seg-group" id="compactModeGroup" role="radiogroup" aria-label="排版紧凑度">
+          <button class="seg-btn" type="button" data-compact-mode="off">原版</button>
+          <button class="seg-btn" type="button" data-compact-mode="compact">紧凑</button>
+          <button class="seg-btn" type="button" data-compact-mode="ultra">极致</button>
+        </div>
+
+        <div class="slider-list" id="compactSliders">
+          <div class="slider-row">
+            <div class="slider-head">
+              <span>行间距</span>
+              <span class="meta" id="valLineHeight">1.40</span>
+            </div>
+            <input type="range" id="rangeLineHeight" min="1.2" max="1.7" step="0.05" value="1.4" aria-label="行间距" />
+          </div>
+          <div class="slider-row">
+            <div class="slider-head">
+              <span>段间距</span>
+              <span class="meta" id="valBlockGap">8px</span>
+            </div>
+            <input type="range" id="rangeBlockGap" min="2" max="18" step="1" value="8" aria-label="段间距" />
+          </div>
+          <div class="slider-row">
+            <div class="slider-head">
+              <span>列表间距</span>
+              <span class="meta" id="valListGap">2px</span>
+            </div>
+            <input type="range" id="rangeListGap" min="0" max="10" step="1" value="2" aria-label="列表间距" />
+          </div>
+        </div>
+
+        <div class="setting-list">
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">每轮底部总信息栏</div>
+              <div class="setting-desc">在每轮对话末尾显示模型、思考强度、缓存、耗时、TPS、总 Token 与金额</div>
+            </div>
+            <label class="switch switch-sm">
+              <input type="checkbox" id="chkShowTurnSummary" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <!-- 4. 更新（默认绑定官方云端仓库） -->
     <section class="panel-group">
       <div class="group-head">
         <div class="title-inline">
@@ -101,7 +153,7 @@
       </div>
     </section>
 
-    <!-- 4. CDP 状态（正常时仅单行状态；异常时才展示提醒与生成启动器） -->
+    <!-- 5. CDP 状态（正常时仅单行状态；异常时才展示提醒与生成启动器） -->
     <section class="panel-group">
       <div class="group-head">
         <div class="title-inline">

@@ -52,7 +52,15 @@ const DEFAULT_FALLBACK_RATE = { inPerM: 1.5, outPerM: 9.0, crPerM: 0.15 };
 const EFFORT_SUFFIX_RE = /-(?:extra-low|low|medium|high|xhigh|max|extra|tiered|thinking|control|agent|customtools)$/i;
 
 export function normalizeModelRateKey(rawModel = '') {
-  let slug = String(rawModel || '').trim().toLowerCase().replace(/^models\//, '');
+  let slug = String(rawModel || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^models\//, '')
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    .replace(/\s+/g, '-');
+  if (slug.startsWith('claude-')) {
+    slug = slug.replace(/\./g, '-');
+  }
   if (!slug) return '';
   for (let i = 0; i < 3; i++) {
     const next = slug.replace(EFFORT_SUFFIX_RE, '');

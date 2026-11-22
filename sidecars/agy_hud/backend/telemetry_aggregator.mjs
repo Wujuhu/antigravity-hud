@@ -5,6 +5,7 @@ import {
   resolveConversationAppData,
 } from './analyzer.mjs';
 import { computeSpeedMetricsFromFile } from './speed_tracker.mjs';
+import { readConversationSqliteMetrics } from './sqlite_metrics.mjs';
 import {
   buildWeeklyQuotaEstimates,
   scanWeeklyLocalUsage,
@@ -291,11 +292,16 @@ export function assembleHudSnapshot({
       compactionSavedTokens: contextSnap?.compaction?.totalSavedTokens || 0,
     },
     speed: {
+      source: speedMetrics?.source || 'transcript',
       latestTokPerSec: speedMetrics?.latestTokPerSec ?? null,
+      latestE2eTokPerSec: speedMetrics?.latestE2eTokPerSec ?? null,
       avgTokPerSec: speedMetrics?.avgTokPerSec ?? null,
       lastDurationSec: speedMetrics?.lastDurationSec ?? null,
+      lastStreamSec: speedMetrics?.lastStreamSec ?? null,
+      lastTtftSec: speedMetrics?.lastTtftSec ?? null,
       lastOutputTokens: speedMetrics?.lastOutputTokens ?? Number(cache.lastOutputTokens || 0),
     },
+    turns: Array.isArray(speedMetrics?.turns) ? speedMetrics.turns : [],
     cache: {
       lastHitPct: Number.isFinite(Number(cache.cacheHitRatio)) ? Number(cache.cacheHitRatio) : null,
       lastCachedTokens: Number(cache.cachedTokens || 0),
@@ -320,6 +326,7 @@ export function assembleHudSnapshot({
       activeFiveHourPct: primaryBucket?.remainingPct ?? null,
       activeFiveHourRemainingMs: primaryBucket?.remainingMs ?? null,
       activeWeeklyPct: activeNormalized?.weekly?.remainingPct ?? null,
+      activeWeeklyRemainingMs: activeNormalized?.weekly?.remainingMs ?? null,
       groups: normalizedQuotaGroups,
     },
     weeklyEstimate,
@@ -351,7 +358,10 @@ export async function collectLiveSnapshot({
     const appData = resolveConversationAppData(convId);
     if (appData) {
       contextSnap = await analyzeConversation(appData, convId, { workspaceUris });
-      if (contextSnap?.found && contextSnap?.transcriptStats?.path) {
+      // Prefer nanosecond-accurate SQLite gen_metadata stream TPS & per-turn totals;
+      // fall back cleanly to transcript.jsonl estimation if DB is unavailable.
+      speedMetrics = readConversationSqliteMetrics(appData, convId);
+      if (!speedMetrics && contextSnap?.found && contextSnap?.transcriptStats?.path) {
         speedMetrics = computeSpeedMetricsFromFile(contextSnap.transcriptStats.path);
       }
     }

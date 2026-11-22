@@ -60,6 +60,7 @@ let latestCdpStatus = {
   error: '尚未同步',
 };
 let latestLauncherInfo = null;
+let lastWeeklyComputedAtMs = null;
 let latestUpdateStatus = {
   ok: false,
   configured: Boolean(configStore.get().updateRepoSlug || DEFAULT_UPDATE_REPO_SLUG),
@@ -277,12 +278,18 @@ function buildStatePayload({ includeWeekly = false, forceWeekly = false } = {}) 
       force: forceWeekly,
     });
     weeklyEstimate = buildWeeklyQuotaEstimates(weeklyUsage, quotaGroups, anchors);
+    if (weeklyUsage?.scannedAtMs) {
+      lastWeeklyComputedAtMs = weeklyUsage.scannedAtMs;
+    } else if (!lastWeeklyComputedAtMs) {
+      lastWeeklyComputedAtMs = Date.now();
+    }
   }
   return {
     platform: process.platform,
     currentVersion: readInstalledVersion(PLUGIN_ROOT),
     config: configStore.get(),
     snapshot: latestSnapshot ? { ...latestSnapshot, weeklyEstimate } : null,
+    weeklyComputedAtMs: lastWeeklyComputedAtMs,
     cdpStatus: latestCdpStatus,
     launcherInfo: latestLauncherInfo,
     updateStatus: latestUpdateStatus,

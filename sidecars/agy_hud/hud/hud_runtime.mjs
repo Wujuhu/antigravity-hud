@@ -289,6 +289,119 @@ export function buildHudCss() {
   color: var(--pop-text);
   background: var(--pop-track);
 }
+
+/* Per-turn summary bar placed cleanly above each turn's feedback toolbar (responsive wrap) */
+.agy-turn-summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 10px;
+  width: 100%;
+  max-width: 100%;
+  margin: 6px 0 3px;
+  padding: 4px 0 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 11px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  color: rgba(232, 234, 237, 0.62);
+  box-sizing: border-box;
+  user-select: text;
+}
+.agy-turn-summary-bar[data-agy-theme="light"] {
+  border-top-color: rgba(0, 0, 0, 0.07);
+  color: rgba(24, 25, 27, 0.6);
+}
+.agy-turn-summary-bar .agy-turn-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.agy-turn-summary-bar .agy-turn-model {
+  color: rgba(232, 234, 237, 0.88);
+  font-weight: 500;
+}
+.agy-turn-summary-bar[data-agy-theme="light"] .agy-turn-model {
+  color: rgba(24, 25, 27, 0.88);
+}
+.agy-turn-summary-bar .agy-turn-effort {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(232, 234, 237, 0.78);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.agy-turn-summary-bar[data-agy-theme="light"] .agy-turn-effort {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(24, 25, 27, 0.76);
+}
+.agy-turn-summary-bar .agy-turn-val {
+  color: rgba(232, 234, 237, 0.84);
+}
+.agy-turn-summary-bar[data-agy-theme="light"] .agy-turn-val {
+  color: rgba(24, 25, 27, 0.84);
+}
+
+/* Optional compact layout rules adapted from WhiteBr1ck/agy-powertools (MIT License) */
+html[data-agy-hud-compact="1"] [data-testid="agent-response"],
+html[data-agy-hud-compact="1"] [data-testid="agent-response"] :is([data-markdown-root], p, li, pre, code, button, .text-base, .text-sm, .text-compact),
+html[data-agy-hud-compact="1"] [data-testid="cascade-system-message-toolbar"],
+html[data-agy-hud-compact="1"] [data-testid="cascade-system-message-toolbar"] :is([data-markdown-root], p, pre, code, button, .text-base),
+html[data-agy-hud-compact="1"] [data-testid="user-input-step"],
+html[data-agy-hud-compact="1"] [data-testid="user-input-step"] .text-base {
+  line-height: var(--agy-hud-lh, 1.4) !important;
+}
+html[data-agy-hud-compact="1"] [data-testid="agent-response"] :is([data-testid="worked-for-collapsible"], [data-testid="tool-group-collapsible"], div.group.min-h-8) {
+  min-height: 24px;
+  padding-block: 2px;
+}
+html[data-agy-hud-compact="1"] [data-testid="agent-response"] [data-testid="cascade-system-message-toolbar"],
+html[data-agy-hud-compact="1"] [data-testid="cascade-system-message-toolbar"] {
+  gap: 4px;
+}
+html[data-agy-hud-compact="1"] [data-testid="agent-response"] [data-markdown-root] {
+  gap: 0;
+}
+html[data-agy-hud-compact="1"] [data-testid="agent-response"] [data-markdown-root] :is(p, ul, ol, blockquote) {
+  margin-block: 0;
+}
+html[data-agy-hud-compact="1"] [data-testid="agent-response"] [data-markdown-root] > :not(style) + :not(style) {
+  margin-block-start: var(--agy-hud-block-gap, 8px);
+}
+html[data-agy-hud-compact="1"] [data-testid="agent-response"] [data-markdown-root] :is(h1, h2, h3, h4, h5, h6) {
+  line-height: var(--agy-hud-lh, 1.4);
+}
+html[data-agy-hud-compact="1"] [data-testid="agent-response"] [data-markdown-root] li {
+  margin-block: var(--agy-hud-list-gap, 2px);
+}
+html[data-agy-hud-compact="1"] [data-testid="agent-response"] [data-markdown-root] :is(li, blockquote) > :not(style) + :not(style) {
+  margin-block-start: calc(var(--agy-hud-block-gap, 8px) * 0.75);
+}
+html[data-agy-hud-compact="1"] [data-testid="user-input-step"] {
+  padding-top: 0.75rem;
+}
+@layer theme {
+  html[data-agy-hud-compact="1"] [data-testid="agent-response"] [data-markdown-root] :is(h1, h2, h3, h4, h5, h6) {
+    margin-block: calc(var(--agy-hud-block-gap, 8px) + 4px) 0 !important;
+  }
+  html[data-agy-hud-compact="1"] [data-testid="agent-response"] [data-markdown-root] blockquote > :first-child {
+    margin-block-start: 0 !important;
+  }
+  html[data-agy-hud-compact="1"] [data-testid="agent-response"] [data-markdown-root] hr {
+    margin-block: calc(var(--agy-hud-block-gap, 8px) + 4px) !important;
+  }
+  html[data-agy-hud-compact="1"] [data-testid="agent-response"] [data-markdown-root] hr + :not(style),
+  html[data-agy-hud-compact="1"] [data-testid="agent-response"] [data-markdown-root] > :first-child,
+  html[data-agy-hud-compact="1"] [data-testid="agent-response"] [data-markdown-root] > style + :not(style) {
+    margin-block-start: 0 !important;
+  }
+  html[data-agy-hud-compact="1"] [data-testid="agent-response"] [data-markdown-root] > :last-child {
+    margin-block-end: 0 !important;
+  }
+}
 `;
 }
 
@@ -508,6 +621,11 @@ export function buildHudInjectExpression(snapshot, config) {
             var qColor = qta.activeFiveHourPct <= 15 ? 'var(--hud-danger)' : qta.activeFiveHourPct <= 35 ? 'var(--hud-warn)' : 'var(--hud-text)';
             var qLbl = qta.primaryBucketLabel || '5h';
             segments.push('<span class="agy-hud-seg" style="color:' + qColor + '"><span class="agy-hud-muted">' + esc(qLbl) + '</span> ' + esc(qta.activeFiveHourPct) + '%</span>');
+          }
+        } else if (id === 'weeklyQuota') {
+          if (qta.available && qta.activeWeeklyPct != null) {
+            var wColor = qta.activeWeeklyPct <= 15 ? 'var(--hud-danger)' : qta.activeWeeklyPct <= 35 ? 'var(--hud-warn)' : 'var(--hud-text)';
+            segments.push('<span class="agy-hud-seg" style="color:' + wColor + '"><span class="agy-hud-muted">周</span> ' + esc(qta.activeWeeklyPct) + '%</span>');
           }
         } else if (id === 'cache') {
           if (cac.lastHitPct != null) {
@@ -754,8 +872,211 @@ export function buildHudInjectExpression(snapshot, config) {
       }
     }
 
+    function fmtSec(sec) {
+      var s = Number(sec || 0);
+      if (!Number.isFinite(s) || s <= 0) return '';
+      if (s >= 60) {
+        var mins = Math.floor(s / 60);
+        var rem = Math.round(s % 60);
+        return rem > 0 ? mins + 'm' + rem + 's' : mins + 'm';
+      }
+      return (s >= 10 ? s.toFixed(1) : s.toFixed(1)) + 's';
+    }
+
+    function fmtUsd(v) {
+      var n = Number(v || 0);
+      if (!Number.isFinite(n) || n <= 0) return '$0.00';
+      if (n < 0.01) return '$' + n.toFixed(4).replace(/0+$/, '');
+      if (n >= 100) return '$' + n.toFixed(1);
+      return '$' + n.toFixed(2);
+    }
+
+    function applyCompactLayout() {
+      var root = document.documentElement;
+      if (!root) return;
+      var mode = cfg.compactMode || 'off';
+      if (mode === 'off') {
+        root.removeAttribute('data-agy-hud-compact');
+        root.style.removeProperty('--agy-hud-lh');
+        root.style.removeProperty('--agy-hud-block-gap');
+        root.style.removeProperty('--agy-hud-list-gap');
+        return;
+      }
+      var lh = mode === 'ultra' ? 1.3 : mode === 'compact' ? 1.4 : Number(cfg.compactLineHeight || 1.4);
+      var bg = mode === 'ultra' ? 5 : mode === 'compact' ? 8 : Number(cfg.compactBlockGap ?? 8);
+      var lg = mode === 'ultra' ? 1 : mode === 'compact' ? 2 : Number(cfg.compactListGap ?? 2);
+      root.setAttribute('data-agy-hud-compact', '1');
+      root.style.setProperty('--agy-hud-lh', String(lh));
+      root.style.setProperty('--agy-hud-block-gap', String(bg) + 'px');
+      root.style.setProperty('--agy-hud-list-gap', String(lg) + 'px');
+    }
+
+    function extractToolbarStepMeta(tb) {
+      try {
+        var keys = Object.keys(tb);
+        var fk = '';
+        for (var k = 0; k < keys.length; k++) {
+          if (keys[k].indexOf('__reactFiber$') === 0 || keys[k].indexOf('__reactInternalInstance$') === 0) {
+            fk = keys[k];
+            break;
+          }
+        }
+        if (!fk) return null;
+        var f = tb[fk];
+        var nrcProps = null;
+        var iEcProps = null;
+        var sliceProps = null;
+        for (var i = 0; i < 20 && f; i++) {
+          var p = f.memoizedProps;
+          if (p) {
+            if (!nrcProps && Array.isArray(p.steps) && 'showThumbsUpDown' in p) nrcProps = p;
+            if (!iEcProps && p.cascadeId && Array.isArray(p.trajectorySteps) && typeof p.trajectoryLength === 'number') {
+              iEcProps = p;
+            }
+            if (!sliceProps && p.trajectorySlice && Array.isArray(p.trajectorySlice.stepsInSlice)) {
+              sliceProps = p;
+            }
+          }
+          if (nrcProps && (iEcProps || sliceProps)) break;
+          f = f.return;
+        }
+        if (!nrcProps) return null;
+        var tSteps = iEcProps
+          ? iEcProps.trajectorySteps
+          : sliceProps && sliceProps.trajectorySlice
+            ? sliceProps.trajectorySlice.stepsInSlice
+            : [];
+        var base = iEcProps
+          ? iEcProps.trajectoryLength - tSteps.length
+          : sliceProps && sliceProps.trajectorySlice && typeof sliceProps.trajectorySlice.totalStepsLength === 'number'
+            ? sliceProps.trajectorySlice.totalStepsLength - tSteps.length
+            : 0;
+        var maxStep = -1;
+        var maxMeta = -1;
+        for (var sIdx = 0; sIdx < nrcProps.steps.length; sIdx++) {
+          var s = nrcProps.steps[sIdx];
+          if (!s) continue;
+          var srcInfo = s.metadata && s.metadata.sourceTrajectoryStepInfo;
+          var si = srcInfo && typeof srcInfo.stepIndex === 'number' ? srcInfo.stepIndex : -1;
+          if (si < 0 && tSteps.length > 0) {
+            var pos = tSteps.indexOf(s);
+            if (pos >= 0) si = base + pos;
+          }
+          if (si > maxStep) maxStep = si;
+          if (srcInfo && typeof srcInfo.metadataIndex === 'number' && srcInfo.metadataIndex > maxMeta) {
+            maxMeta = srcInfo.metadataIndex;
+          }
+        }
+        if (maxStep < 0 && maxMeta < 0) return null;
+        return { maxStep: maxStep, maxMeta: maxMeta };
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function matchTurnForToolbar(turns, meta, fallbackIdx) {
+      if (!Array.isArray(turns) || turns.length === 0) return null;
+      if (meta) {
+        if (meta.maxStep >= 0) {
+          for (var i = 0; i < turns.length; i++) {
+            var t = turns[i];
+            if (meta.maxStep >= t.startStepIdx && (t.endStepIdx < 0 || meta.maxStep <= t.endStepIdx)) {
+              return t;
+            }
+          }
+        }
+        if (meta.maxMeta >= 0) {
+          for (var j = 0; j < turns.length; j++) {
+            var t2 = turns[j];
+            if (meta.maxMeta >= t2.minGenIdx && meta.maxMeta <= t2.maxGenIdx) {
+              return t2;
+            }
+          }
+        }
+      }
+      if (fallbackIdx >= 0 && fallbackIdx < turns.length) {
+        return turns[fallbackIdx];
+      }
+      return null;
+    }
+
+    function buildTurnSummaryHtml(t) {
+      if (!t) return '';
+      var parts = [];
+      if (t.modelLabel) {
+        var mHtml = '<span class="agy-turn-model">' + esc(t.modelLabel) + '</span>';
+        if (t.effort) {
+          mHtml += '<span class="agy-turn-effort">' + esc(t.effort) + '</span>';
+        }
+        parts.push('<span class="agy-turn-item">' + mHtml + '</span>');
+      }
+      if (t.cacheHitPct != null) {
+        parts.push('<span class="agy-turn-item">缓存 <span class="agy-turn-val">' + esc(Number(t.cacheHitPct).toFixed(1)) + '%</span></span>');
+      }
+      if (t.totalDurSec > 0) {
+        parts.push('<span class="agy-turn-item">耗时 <span class="agy-turn-val">' + esc(fmtSec(t.totalDurSec)) + '</span></span>');
+      }
+      if (t.tps != null && t.tps > 0) {
+        parts.push('<span class="agy-turn-item"><span class="agy-turn-val">' + esc(t.tps) + ' tok/s</span></span>');
+      }
+      if (t.totalTokens > 0) {
+        parts.push('<span class="agy-turn-item">Token <span class="agy-turn-val">' + esc(fmtTok(t.totalTokens)) + '</span></span>');
+      }
+      if (t.totalCostUsd != null && t.totalTokens > 0) {
+        parts.push('<span class="agy-turn-item">金额 <span class="agy-turn-val">' + esc(fmtUsd(t.totalCostUsd)) + '</span></span>');
+      }
+      return parts.join('');
+    }
+
+    function renderTurnSummaries(theme) {
+      var turns = Array.isArray(snap.turns) ? snap.turns : [];
+      var enabled = cfg.showTurnSummary !== false && turns.length > 0;
+      if (!enabled) {
+        var existing = document.querySelectorAll('.agy-turn-summary-bar');
+        for (var r = 0; r < existing.length; r++) existing[r].remove();
+        return;
+      }
+
+      var toolbars = document.querySelectorAll('[data-testid="cascade-system-message-toolbar"]');
+      if (!toolbars || toolbars.length === 0) return;
+
+      for (var i = 0; i < toolbars.length; i++) {
+        var tb = toolbars[i];
+        var parent = tb.parentElement;
+        if (!parent) continue;
+        var prev = tb.previousElementSibling;
+        var bar = prev && prev.classList && prev.classList.contains('agy-turn-summary-bar') ? prev : null;
+
+        var meta = extractToolbarStepMeta(tb);
+        var turn = matchTurnForToolbar(turns, meta, i);
+        if (!turn) {
+          if (bar) bar.remove();
+          continue;
+        }
+        var html = buildTurnSummaryHtml(turn);
+        if (!html) {
+          if (bar) bar.remove();
+          continue;
+        }
+        if (!bar) {
+          bar = document.createElement('div');
+          bar.className = 'agy-turn-summary-bar';
+          bar.setAttribute('data-agy-turn-bar', '1');
+          parent.insertBefore(bar, tb);
+        }
+        bar.setAttribute('data-agy-theme', theme);
+        if (bar.getAttribute('data-agy-turn-html') !== html) {
+          bar.setAttribute('data-agy-turn-html', html);
+          bar.innerHTML = html;
+        }
+      }
+    }
+
     function mountAndRender() {
       var theme = detectTheme();
+      applyCompactLayout();
+      renderTurnSummaries(theme);
+
       var anchor = findComposerAnchor();
       if (!anchor) return false;
 
@@ -795,12 +1116,22 @@ export function buildHudInjectExpression(snapshot, config) {
 
     if (!window.__agyHudObserver && typeof MutationObserver === 'function' && document.body) {
       var pending = false;
-      window.__agyHudObserver = new MutationObserver(function() {
+      window.__agyHudObserver = new MutationObserver(function(mutations) {
+        var relevant = false;
+        for (var m = 0; m < mutations.length; m++) {
+          var tgt = mutations[m].target;
+          if (tgt && tgt.closest && (tgt.closest('#' + IDS.root) || tgt.closest('#' + IDS.popover) || tgt.closest('.agy-turn-summary-bar'))) {
+            continue;
+          }
+          relevant = true;
+          break;
+        }
+        if (!relevant) return;
         if (pending) return;
         pending = true;
         requestAnimationFrame(function() {
           pending = false;
-          if (!document.getElementById(IDS.root) && typeof window.__agyHudLatestRender === 'function') {
+          if (typeof window.__agyHudLatestRender === 'function') {
             window.__agyHudLatestRender();
           }
         });
@@ -827,6 +1158,14 @@ export function buildHudRemoveExpression() {
     for (var i = 0; i < ids.length; i++) {
       var el = document.getElementById(ids[i]);
       if (el && el.parentNode) el.parentNode.removeChild(el);
+    }
+    var bars = document.querySelectorAll('.agy-turn-summary-bar');
+    for (var b = 0; b < bars.length; b++) bars[b].remove();
+    if (document.documentElement) {
+      document.documentElement.removeAttribute('data-agy-hud-compact');
+      document.documentElement.style.removeProperty('--agy-hud-lh');
+      document.documentElement.style.removeProperty('--agy-hud-block-gap');
+      document.documentElement.style.removeProperty('--agy-hud-list-gap');
     }
     return { ok: true, removed: true };
   } catch (e) {

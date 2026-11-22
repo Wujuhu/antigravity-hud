@@ -9,7 +9,8 @@ export const DEFAULT_UPDATE_REPO_SLUG = 'Wujuhu/antigravity-hud';
 export const PILL_ITEM_CATALOG = [
   { id: 'context', label: '上下文', defaultEnabled: true },
   { id: 'speed', label: '速率', defaultEnabled: true },
-  { id: 'quota', label: '额度', defaultEnabled: true },
+  { id: 'quota', label: '5h 额度', defaultEnabled: true },
+  { id: 'weeklyQuota', label: '周额度', defaultEnabled: false },
   { id: 'cache', label: '缓存命中', defaultEnabled: false },
   { id: 'tokens', label: '会话总计', defaultEnabled: false },
   { id: 'model', label: '上游模型', defaultEnabled: false },
@@ -21,8 +22,15 @@ export const POPOVER_SECTION_CATALOG = [
   { id: 'quota', label: '额度', defaultEnabled: true },
 ];
 
+export const COMPACT_PRESETS = {
+  off: { lineHeight: 1.6, blockGap: 14, listGap: 6 },
+  compact: { lineHeight: 1.4, blockGap: 8, listGap: 2 },
+  ultra: { lineHeight: 1.3, blockGap: 5, listGap: 1 },
+};
+
 const VALID_PILL_IDS = new Set(PILL_ITEM_CATALOG.map((item) => item.id));
 const VALID_SECTION_IDS = new Set(POPOVER_SECTION_CATALOG.map((item) => item.id));
+const VALID_COMPACT_MODES = new Set(['off', 'compact', 'ultra', 'custom']);
 const LEGACY_SECTION_MAP = {
   contextOverview: 'context',
   contextBreakdown: 'context',
@@ -39,6 +47,11 @@ export function createDefaultConfig() {
     hoverDelayMs: 150,
     contextDisplayFormat: 'percent',
     windowCapMode: 'auto',
+    compactMode: 'off',
+    compactLineHeight: 1.4,
+    compactBlockGap: 8,
+    compactListGap: 2,
+    showTurnSummary: true,
     updateRepoSlug: DEFAULT_UPDATE_REPO_SLUG,
     autoCheckUpdate: true,
     autoApplyUpdate: false,
@@ -57,6 +70,14 @@ function clampInt(val, min, max, fallback) {
   const n = Number(val);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+function clampFloat(val, min, max, fallback, decimals = 2) {
+  const n = Number(val);
+  if (!Number.isFinite(n)) return fallback;
+  const clamped = Math.min(max, Math.max(min, n));
+  const factor = Math.pow(10, decimals);
+  return Math.round(clamped * factor) / factor;
 }
 
 function normalizeOrderedItems(rawList, catalog, validSet, legacyMap = null) {
@@ -104,6 +125,10 @@ export function normalizeConfig(raw = {}) {
     }
   }
 
+  const compactMode = VALID_COMPACT_MODES.has(src.compactMode)
+    ? src.compactMode
+    : defaults.compactMode;
+
   return {
     cdpEnabled: typeof src.cdpEnabled === 'boolean' ? src.cdpEnabled : defaults.cdpEnabled,
     cdpPort: clampInt(src.cdpPort, 1024, 65535, defaults.cdpPort),
@@ -111,6 +136,11 @@ export function normalizeConfig(raw = {}) {
     hoverDelayMs: clampInt(src.hoverDelayMs, 0, 1000, defaults.hoverDelayMs),
     contextDisplayFormat,
     windowCapMode,
+    compactMode,
+    compactLineHeight: clampFloat(src.compactLineHeight, 1.2, 1.7, defaults.compactLineHeight, 2),
+    compactBlockGap: clampInt(src.compactBlockGap, 2, 18, defaults.compactBlockGap),
+    compactListGap: clampInt(src.compactListGap, 0, 10, defaults.compactListGap),
+    showTurnSummary: typeof src.showTurnSummary === 'boolean' ? src.showTurnSummary : defaults.showTurnSummary,
     updateRepoSlug: typeof src.updateRepoSlug === 'string' ? src.updateRepoSlug.trim().slice(0, 120) : defaults.updateRepoSlug,
     autoCheckUpdate: typeof src.autoCheckUpdate === 'boolean' ? src.autoCheckUpdate : defaults.autoCheckUpdate,
     autoApplyUpdate: typeof src.autoApplyUpdate === 'boolean' ? src.autoApplyUpdate : defaults.autoApplyUpdate,

@@ -19,6 +19,11 @@ import {
   extractConversationIdFromUrl,
   isAntigravityAppTarget,
 } from '../sidecars/agy_hud/backend/cdp_bridge.mjs';
+import {
+  buildPerTurnSummaries,
+  computePrimaryTps,
+  splitModelAndEffort,
+} from '../sidecars/agy_hud/backend/sqlite_metrics.mjs';
 import { installPlugin } from '../scripts/install.mjs';
 import { uninstallPlugin } from '../scripts/uninstall.mjs';
 
@@ -111,10 +116,107 @@ test('installPlugin and uninstallPlugin work cleanly in an isolated temp directo
     assert.equal(fs.existsSync(res.configFile), true);
     assert.equal(res.config.cdpPort, 9444);
 
-    await uninstallPlugin({ targetDir, dataDir, purgeData: true, silent: true });
+    await uninstallPlugin({
+      targetDir,
+      dataDir,
+      desktopDir: path.join(tmpRoot, 'desktop'),
+      applicationsDir: path.join(tmpRoot, 'Applications'),
+      purgeData: true,
+      silent: true,
+    });
     assert.equal(fs.existsSync(targetDir), false);
     assert.equal(fs.existsSync(dataDir), false);
   } finally {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   }
+});
+
+test('sqlite_metrics computes stream TPS with fallback, splits model & effort, and aggregates per-turn totals', () => {
+  // Normal stream TPS (>= 0.12s, <= 3000)
+  const r1 = computePrimaryTps(1000, 5.0, 10.0);
+  assert.equal(r1.displayTps, 200);
+  assert.equal(r1.e2eTps, 100);
+
+  // Too short stream (< 0.12s) falls back to e2eTps
+  const r2 = computePrimaryTps(500, 0.05, 5.0);
+  assert.equal(r2.displayTps, 100);
+
+  // Spike (> 3000 tok/s) falls back to e2eTps
+  const r3 = computePrimaryTps(1000, 0.2, 4.0);
+  assert.equal(r3.displayTps, 250);
+
+  assert.deepEqual(splitModelAndEffort('Gemini 4 Neon (High)'), {
+    modelLabel: 'Gemini 4 Neon',
+    effort: 'High',
+  });
+  assert.deepEqual(splitModelAndEffort('gemini-4-hydrogen-xhigh'), {
+    modelLabel: 'Gemini 4 Hydrogen',
+    effort: 'XHigh',
+  });
+  assert.deepEqual(splitModelAndEffort('claude-sonnet-4-6-medium'), {
+    modelLabel: 'Claude Sonnet 4.6',
+    effort: 'Medium',
+  });
+
+  // Aggregate multi-step calls within one user turn into total turn summary
+  const turns = buildPerTurnSummaries(
+    [
+      {
+        idx: 1,
+        maxStepIdx: 3,
+        modelName: 'Gemini 4 Neon (High)',
+        inTok: 10000,
+        cacheWrite: 0,
+        cacheRead: 90000,
+        outTok: 500,
+        thinkTok: 200,
+        respTok: 300,
+        ttft: 2.0,
+        stream: 2.5,
+        totDur: 4.5,
+      },
+      {
+        idx: 2,
+        maxStepIdx: 6,
+        modelName: 'Gemini 4 Neon (High)',
+        inTok: 5000,
+        cacheWrite: 0,
+        cacheRead: 95000,
+        outTok: 1500,
+        thinkTok: 400,
+        respTok: 1100,
+        ttft: 3.0,
+        stream: 7.5,
+        totDur: 10.5,
+      },
+      {
+        idx: 3,
+        maxStepIdx: 12,
+        modelName: 'Claude Sonnet 4.6 (Medium)',
+        inTok: 2000,
+        cacheWrite: 0,
+        cacheRead: 18000,
+        outTok: 400,
+        thinkTok: 0,
+        respTok: 400,
+        ttft: 1.0,
+        stream: 4.0,
+        totDur: 5.0,
+      },
+    ],
+    [0, 10],
+  );
+
+  assert.equal(turns.length, 2);
+  assert.equal(turns[0].stepCount, 2);
+  assert.equal(turns[0].modelLabel, 'Gemini 4 Neon');
+  assert.equal(turns[0].effort, 'High');
+  assert.equal(turns[0].totalTokens, 202000);
+  assert.equal(turns[0].cacheHitPct, 92.5);
+  assert.equal(turns[0].totalDurSec, 15);
+  assert.equal(turns[0].tps, 200); // (500 + 1500) / (2.5 + 7.5)
+  assert.ok(turns[0].totalCostUsd > 0);
+  assert.equal(turns[1].modelLabel, 'Claude Sonnet 4.6');
+  assert.equal(turns[1].effort, 'Medium');
+  assert.equal(turns[1].tps, 100);
 });

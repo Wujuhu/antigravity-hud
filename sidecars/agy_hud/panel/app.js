@@ -4,6 +4,12 @@
 
   const $ = (id) => document.getElementById(id);
 
+  const COMPACT_PRESETS = {
+    off: { lineHeight: 1.6, blockGap: 14, listGap: 6, label: '原版' },
+    compact: { lineHeight: 1.4, blockGap: 8, listGap: 2, label: '紧凑' },
+    ultra: { lineHeight: 1.3, blockGap: 5, listGap: 1, label: '极致' },
+  };
+
   const GRIP_SVG =
     '<svg viewBox="0 0 12 12" width="11" height="11" fill="currentColor" aria-hidden="true">' +
       '<circle cx="4" cy="2.5" r="0.9"/><circle cx="8" cy="2.5" r="0.9"/>' +
@@ -33,6 +39,14 @@
     const v = Number(n || 0);
     if (!Number.isFinite(v) || v <= 0) return '$0.00';
     return v >= 100 ? `$${v.toFixed(1)}` : `$${v.toFixed(2)}`;
+  }
+
+  function fmtTimeShort(ms) {
+    const n = Number(ms || 0);
+    if (!Number.isFinite(n) || n <= 0) return '--';
+    const d = new Date(n);
+    const pad = (x) => String(x).padStart(2, '0');
+    return `更新于 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
   async function api(method, path, body) {
@@ -165,8 +179,46 @@
     el.textContent = active.length > 0 ? active.join(' · ') : '未启用';
   }
 
-  function renderWeeklyEstimate(we) {
+  function renderLayoutControls(config) {
+    const mode = config.compactMode || 'off';
+    const lh = Number(config.compactLineHeight || 1.4);
+    const bg = Number(config.compactBlockGap ?? 8);
+    const lg = Number(config.compactListGap ?? 2);
+
+    const summaryEl = $('layoutSummaryText');
+    if (summaryEl) {
+      summaryEl.textContent =
+        mode === 'custom'
+          ? `自定义 · ${lh.toFixed(2)} / ${bg}px`
+          : COMPACT_PRESETS[mode]?.label || '原版';
+    }
+
+    document.querySelectorAll('[data-compact-mode]').forEach((btn) => {
+      btn.classList.toggle('is-active', btn.dataset.compactMode === mode);
+    });
+
+    if (document.activeElement !== $('rangeLineHeight')) {
+      $('rangeLineHeight').value = String(lh);
+    }
+    if (document.activeElement !== $('rangeBlockGap')) {
+      $('rangeBlockGap').value = String(bg);
+    }
+    if (document.activeElement !== $('rangeListGap')) {
+      $('rangeListGap').value = String(lg);
+    }
+    $('valLineHeight').textContent = lh.toFixed(2);
+    $('valBlockGap').textContent = `${bg}px`;
+    $('valListGap').textContent = `${lg}px`;
+    $('chkShowTurnSummary').checked = config.showTurnSummary !== false;
+  }
+
+  function renderWeeklyEstimate(we, computedAtMs) {
     const box = $('weeklyEstimateBody');
+    const updatedEl = $('weeklyUpdatedAt');
+    if (updatedEl) {
+      updatedEl.textContent = fmtTimeShort(computedAtMs);
+    }
+
     const groups = Array.isArray(we?.groups) ? we.groups : [];
     if (!we || groups.length === 0) {
       box.innerHTML = '<div class="meta">暂无数据</div>';
@@ -224,7 +276,17 @@
 
   function render() {
     if (!state) return;
-    const { config, cdpStatus, platform, launcherInfo, catalogs, snapshot, currentVersion, updateStatus } = state;
+    const {
+      config,
+      cdpStatus,
+      platform,
+      launcherInfo,
+      catalogs,
+      snapshot,
+      weeklyComputedAtMs,
+      currentVersion,
+      updateStatus,
+    } = state;
 
     const dot = $('statusDot');
     const badge = $('cdpStateText');
@@ -294,9 +356,10 @@
     $('selectCtxFormat').value = config.contextDisplayFormat;
     $('selectWindowCap').value = String(config.windowCapMode);
 
-    renderWeeklyEstimate(snapshot?.weeklyEstimate || null);
+    renderWeeklyEstimate(snapshot?.weeklyEstimate || null, weeklyComputedAtMs);
     renderHudSummary(config.pillItems, catalogs?.pillItems);
     renderSortableList($('pillItemsList'), 'pillItems', config.pillItems, catalogs?.pillItems);
+    renderLayoutControls(config);
   }
 
   async function refresh() {
@@ -309,14 +372,45 @@
     const val = e.target.value === 'auto' ? 'auto' : Number(e.target.value);
     savePatch({ windowCapMode: val });
   });
-  $('btnRefresh').addEventListener('click', async () => {
-    state = await api('POST', '/api/refresh', {});
-    render();
-  });
   $('btnReset').addEventListener('click', async () => {
     state = await api('POST', '/api/config/reset', {});
     render();
   });
+
+  document.querySelectorAll('[data-compact-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.compactMode;
+      const preset = COMPACT_PRESETS[mode];
+      if (!preset) return;
+      savePatch({
+        compactMode: mode,
+        compactLineHeight: preset.lineHeight,
+        compactBlockGap: preset.blockGap,
+        compactListGap: preset.listGap,
+      });
+    });
+  });
+
+  function bindSlider(id, valId, key, formatFn) {
+    const el = $(id);
+    el.addEventListener('input', () => {
+      $(valId).textContent = formatFn(el.value);
+    });
+    el.addEventListener('change', () => {
+      savePatch({
+        compactMode: 'custom',
+        [key]: Number(el.value),
+      });
+    });
+  }
+  bindSlider('rangeLineHeight', 'valLineHeight', 'compactLineHeight', (v) => Number(v).toFixed(2));
+  bindSlider('rangeBlockGap', 'valBlockGap', 'compactBlockGap', (v) => `${Math.round(Number(v))}px`);
+  bindSlider('rangeListGap', 'valListGap', 'compactListGap', (v) => `${Math.round(Number(v))}px`);
+
+  $('chkShowTurnSummary').addEventListener('change', (e) => {
+    savePatch({ showTurnSummary: e.target.checked });
+  });
+
   $('btnGenerateLauncher').addEventListener('click', async () => {
     const res = await api('POST', '/api/launcher/generate', {});
     if (res?.state) {

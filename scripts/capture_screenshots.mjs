@@ -258,6 +258,7 @@ function buildComposerDemoHtml(theme = 'dark') {
 const demoPanelState = {
   platform: 'win32',
   currentVersion: '1.0.0',
+  weeklyComputedAtMs: Date.now(),
   config: demoConfig,
   snapshot: demoSnapshot,
   cdpStatus: {
@@ -366,7 +367,7 @@ async function snap(urlPath, outName, width, height) {
 try {
   await snap('/hud-dark', 'hud-hover-dark.png', 860, 410);
   await snap('/hud-light', 'hud-hover-light.png', 860, 410);
-  await snap('/panel', 'sidecar-panel.png', 520, 410);
+  await snap('/panel', 'sidecar-panel.png', 520, 460);
 } finally {
   server.close();
 }
