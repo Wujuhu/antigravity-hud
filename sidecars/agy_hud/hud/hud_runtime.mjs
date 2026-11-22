@@ -1014,16 +1014,16 @@ export function buildHudInjectExpression(snapshot, config) {
         parts.push('<span class="agy-turn-item">缓存 <span class="agy-turn-val">' + esc(Number(t.cacheHitPct).toFixed(1)) + '%</span></span>');
       }
       if (t.totalDurSec > 0) {
-        parts.push('<span class="agy-turn-item">耗时 <span class="agy-turn-val">' + esc(fmtSec(t.totalDurSec)) + '</span></span>');
+        parts.push('<span class="agy-turn-item"><span class="agy-turn-val">' + esc(fmtSec(t.totalDurSec)) + '</span></span>');
       }
       if (t.tps != null && t.tps > 0) {
         parts.push('<span class="agy-turn-item"><span class="agy-turn-val">' + esc(t.tps) + ' tok/s</span></span>');
       }
       if (t.totalTokens > 0) {
-        parts.push('<span class="agy-turn-item">Token <span class="agy-turn-val">' + esc(fmtTok(t.totalTokens)) + '</span></span>');
+        parts.push('<span class="agy-turn-item"><span class="agy-turn-val">' + esc(fmtTok(t.totalTokens)) + '</span></span>');
       }
       if (t.totalCostUsd != null && t.totalTokens > 0) {
-        parts.push('<span class="agy-turn-item">金额 <span class="agy-turn-val">' + esc(fmtUsd(t.totalCostUsd)) + '</span></span>');
+        parts.push('<span class="agy-turn-item"><span class="agy-turn-val">' + esc(fmtUsd(t.totalCostUsd)) + '</span></span>');
       }
       return parts.join('');
     }
