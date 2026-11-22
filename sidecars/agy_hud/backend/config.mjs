@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 export const DEFAULT_CDP_PORT = 9229;
+export const DEFAULT_UPDATE_REPO_SLUG = 'Wujuhu/antigravity-hud';
 
 export const PILL_ITEM_CATALOG = [
   { id: 'context', label: '上下文', defaultEnabled: true },
@@ -38,7 +39,7 @@ export function createDefaultConfig() {
     hoverDelayMs: 150,
     contextDisplayFormat: 'percent',
     windowCapMode: 'auto',
-    updateRepoSlug: '',
+    updateRepoSlug: DEFAULT_UPDATE_REPO_SLUG,
     autoCheckUpdate: true,
     autoApplyUpdate: false,
     pillItems: PILL_ITEM_CATALOG.map(({ id, defaultEnabled }) => ({

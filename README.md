@@ -55,14 +55,14 @@
 将下方文字直接复制发送给你的 AI Agent，它会自动完成安装，并按文档要求给你输出清晰的使用教程（含后续卸载指引）：
 
 ```text
-请阅读 https://github.com/<你的用户名>/agy-hud 仓库里的 docs/AGENT_INSTALL.md，严格按其中的步骤帮我完成当前系统（Windows / macOS）的 AGY HUD 插件安装与配置；完成后务必按文档要求给我输出一份清晰的使用与卸载教程。
+请阅读 https://github.com/Wujuhu/antigravity-hud 仓库里的 docs/AGENT_INSTALL.md，严格按其中的步骤帮我完成当前系统（Windows / macOS）的 AGY HUD 插件安装与配置；完成后务必按文档要求给我输出一份清晰的使用与卸载教程。
 ```
 
 ### 一键卸载 Prompt
 需要卸载时，直接复制下方文字给你的 AI Agent：
 
 ```text
-请阅读 https://github.com/<你的用户名>/agy-hud 仓库里的 docs/AGENT_UNINSTALL.md，帮我卸载当前系统的 AGY HUD 插件（如需连同配置与启动器彻底清理请使用 --purge-data）并告诉我清理结果。
+请阅读 https://github.com/Wujuhu/antigravity-hud 仓库里的 docs/AGENT_UNINSTALL.md，帮我卸载当前系统的 AGY HUD 插件（如需连同配置与启动器彻底清理请使用 --purge-data）并告诉我清理结果。
 ```
 
 ---
@@ -75,11 +75,11 @@
 
 * **Windows**：下载仓库 ZIP 解压后直接**双击 `install.cmd`**；或在 PowerShell 执行：
   ```powershell
-  git clone https://github.com/<你的用户名>/agy-hud.git && cd agy-hud && node scripts/install.mjs
+  git clone https://github.com/Wujuhu/antigravity-hud.git && cd antigravity-hud && node scripts/install.mjs
   ```
 * **macOS / Linux**：
   ```bash
-  git clone https://github.com/<你的用户名>/agy-hud.git && cd agy-hud && chmod +x install.sh && ./install.sh
+  git clone https://github.com/Wujuhu/antigravity-hud.git && cd antigravity-hud && chmod +x install.sh && ./install.sh
   ```
 
 安装脚本会自动部署插件至 `~/.gemini/config/plugins/agy-hud`，并自动生成 CDP 启动器（Windows 为桌面 `Antigravity (CDP).lnk`，macOS 为 `~/Applications/Antigravity (CDP).app`）。

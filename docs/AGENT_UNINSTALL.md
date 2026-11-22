@@ -11,7 +11,7 @@
    - **彻底卸载（`--purge-data`）**：同时删除 `~/.gemini/antigravity/plugin_data/agy-hud` 以及生成的 CDP 启动器（Windows 桌面 `Antigravity (CDP).lnk` 或 macOS `~/Applications/Antigravity (CDP).app`）。
 
 2. **执行卸载**
-   - 若本地存在 `agy-hud` 仓库目录，进入根目录执行：
+   - 若本地存在 `antigravity-hud` 仓库目录，进入根目录执行：
      - 常规卸载：`node scripts/uninstall.mjs`
      - 彻底卸载：`node scripts/uninstall.mjs --purge-data`
    - 若本地已删除源码仓库，可直接按上述路径安全移除对应目录与启动器文件。

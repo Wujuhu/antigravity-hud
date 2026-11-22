@@ -12,7 +12,7 @@
    - 若未安装或版本过低，请暂停安装并向用户提供对应系统的升级方式（如 Windows `winget install OpenJS.NodeJS.LTS`、macOS `brew install node`）。
 
 2. **获取仓库并执行一键安装**
-   - 若用户尚未在本地克隆本仓库，将其克隆到一个干净的本地目录（如 `~/agy-hud` 或当前工作区）。
+   - 若用户尚未在本地克隆本仓库，将 `https://github.com/Wujuhu/antigravity-hud.git` 克隆到一个干净的本地目录（如 `~/antigravity-hud` 或当前工作区）。
    - 进入仓库根目录运行：
      ```bash
      node scripts/install.mjs

@@ -4,6 +4,14 @@
   "private": false,
   "type": "module",
   "description": "Minimal cross-platform Antigravity composer HUD plugin showing live context, tokens, speed, prompt cache, and quota with customizable items and ordering.",
+  "homepage": "https://github.com/Wujuhu/antigravity-hud#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Wujuhu/antigravity-hud.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Wujuhu/antigravity-hud/issues"
+  },
   "license": "MIT",
   "engines": {
     "node": ">=22.5.0"
