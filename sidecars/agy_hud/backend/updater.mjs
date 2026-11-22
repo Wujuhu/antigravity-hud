@@ -78,7 +78,9 @@ async function fetchJsonWithTimeout(fetchImpl, url, timeoutMs = 8000) {
       },
     });
     if (!res.ok) {
-      throw new Error(`GitHub API HTTP ${res.status}`);
+      const err = new Error(`GitHub API HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
     }
     return await res.json();
   } finally {
@@ -136,6 +138,18 @@ export async function checkForUpdates({
       error: '',
     };
   } catch (err) {
+    if (err && err.status === 404) {
+      return {
+        ok: true,
+        configured: true,
+        repoSlug: slug,
+        currentVersion,
+        latestVersion: currentVersion,
+        hasUpdate: false,
+        checkedAtMs: nowMs,
+        error: '',
+      };
+    }
     return {
       ok: false,
       configured: true,

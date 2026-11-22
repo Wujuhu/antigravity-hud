@@ -36,31 +36,36 @@
       </summary>
 
       <div class="fold-body">
-        <div class="toolbar-row">
-          <div class="select-pair">
-            <select id="selectCtxFormat" aria-label="上下文格式">
-              <option value="percent">上下文 · 占比</option>
-              <option value="tokens">上下文 · Token</option>
-              <option value="both">上下文 · 全部</option>
-            </select>
-            <select id="selectWindowCap" aria-label="窗口上限">
-              <option value="auto">上限 · 自动</option>
-              <option value="256000">上限 · 256k</option>
-              <option value="512000">上限 · 512k</option>
-              <option value="1048576">上限 · 1M</option>
+        <ul class="clean-list" id="pillItemsList"></ul>
+
+        <div class="setting-list">
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">上下文显示模式</div>
+              <div class="setting-desc">控制输入栏胶囊中上下文的显示形式</div>
+            </div>
+            <select id="selectCtxFormat" aria-label="上下文显示模式">
+              <option value="percent">占比</option>
+              <option value="tokens">Token</option>
+              <option value="both">占比 + Token</option>
             </select>
           </div>
-          <button class="btn-text" id="btnReset" type="button">重置</button>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-title">上下文上限</div>
+              <div class="setting-desc">默认读取 Antigravity 会话实际窗口上限，可手动覆盖</div>
+            </div>
+            <select id="selectWindowCap" aria-label="上下文上限">
+              <option value="auto">自动</option>
+              <option value="256000">256k</option>
+              <option value="512000">512k</option>
+              <option value="1048576">1M</option>
+            </select>
+          </div>
         </div>
 
-        <div class="list-block">
-          <div class="sub-label">输入栏胶囊</div>
-          <ul class="clean-list" id="pillItemsList"></ul>
-        </div>
-
-        <div class="list-block">
-          <div class="sub-label">悬停详情卡</div>
-          <ul class="clean-list" id="popoverSectionsList"></ul>
+        <div class="fold-foot">
+          <button class="btn-text" id="btnReset" type="button">恢复默认</button>
         </div>
       </div>
     </details>
@@ -96,23 +101,16 @@
       </div>
     </section>
 
-    <!-- 4. CDP（放到最后） -->
+    <!-- 4. CDP 状态（放到最后，只展示状态与启动器） -->
     <section class="panel-group">
       <div class="group-head">
         <div class="title-inline">
           <span class="status-dot" id="statusDot"></span>
-          <h2>CDP 注入</h2>
-          <span class="meta" id="statusSub"></span>
+          <h2>CDP 状态</h2>
         </div>
-        <div class="action-inline">
-          <input id="inputPort" type="number" min="1024" max="65535" value="9229" aria-label="CDP Port" />
-          <button class="btn-subtle" id="btnSavePort" type="button">应用</button>
-          <label class="switch" title="启用或暂停 CDP 注入">
-            <input type="checkbox" id="chkCdpEnabled" checked />
-            <span class="slider"></span>
-          </label>
-        </div>
+        <span class="status-badge" id="cdpStateText">检测中</span>
       </div>
+      <p class="cdp-alert" id="cdpAlertText" hidden></p>
       <div class="cdp-foot">
         <button class="btn-row" id="btnGenerateLauncher" type="button">
           <span class="btn-row-left">

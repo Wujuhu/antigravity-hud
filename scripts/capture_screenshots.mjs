@@ -113,7 +113,6 @@ const demoSnapshot = assembleHudSnapshot({
       {
         key: 'argon',
         label: 'Argon',
-        fiveHour: { remainingPct: 62, remainingMs: 65 * 60 * 1000, isFull: false },
         weekly: { remainingPct: 58, remainingMs: 48 * 3600 * 1000, isFull: false },
       },
     ],

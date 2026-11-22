@@ -202,23 +202,37 @@
     `;
   }
 
+  function buildCdpAlertMessage(platform, port) {
+    if (platform === 'darwin') {
+      return '当前未处于 CDP 注入状态。请点击下方生成启动器，按 Cmd+Q 彻底退出 Antigravity 后，打开 ~/Applications/Antigravity (CDP).app 重新启动。';
+    }
+    if (platform === 'win32') {
+      return '当前未处于 CDP 注入状态。请点击下方生成启动器，彻底退出 Antigravity（含右下角托盘图标）后，双击桌面 Antigravity (CDP).lnk 重新启动。';
+    }
+    return `当前未处于 CDP 注入状态。请彻底退出 Antigravity 后，使用带 --remote-debugging-port=${port || 9229} 参数的命令重新启动。`;
+  }
+
   function render() {
     if (!state) return;
     const { config, cdpStatus, platform, launcherInfo, catalogs, snapshot, currentVersion, updateStatus } = state;
 
     const dot = $('statusDot');
-    const sub = $('statusSub');
-    if (cdpStatus?.connected) {
-      dot.classList.add('is-ok');
-      sub.textContent = '已连接';
-    } else {
-      dot.classList.remove('is-ok');
-      sub.textContent = config.cdpEnabled ? '未连接' : '已暂停';
-    }
+    const badge = $('cdpStateText');
+    const alertEl = $('cdpAlertText');
+    const isConnected = Boolean(cdpStatus?.connected);
 
-    $('chkCdpEnabled').checked = Boolean(config.cdpEnabled);
-    if (document.activeElement !== $('inputPort')) {
-      $('inputPort').value = String(config.cdpPort);
+    dot.classList.toggle('is-ok', isConnected);
+    dot.classList.toggle('is-err', !isConnected);
+    badge.classList.toggle('is-ok', isConnected);
+    badge.classList.toggle('is-err', !isConnected);
+
+    if (isConnected) {
+      badge.textContent = '正常';
+      alertEl.hidden = true;
+    } else {
+      badge.textContent = '异常';
+      alertEl.textContent = buildCdpAlertMessage(platform, config?.cdpPort);
+      alertEl.hidden = false;
     }
 
     $('btnGenerateLauncherLabel').textContent =
@@ -268,7 +282,6 @@
     renderWeeklyEstimate(snapshot?.weeklyEstimate || null);
     renderHudSummary(config.pillItems, catalogs?.pillItems);
     renderSortableList($('pillItemsList'), 'pillItems', config.pillItems, catalogs?.pillItems);
-    renderSortableList($('popoverSectionsList'), 'popoverSections', config.popoverSections, catalogs?.popoverSections);
   }
 
   async function refresh() {
@@ -276,13 +289,6 @@
     render();
   }
 
-  $('chkCdpEnabled').addEventListener('change', (e) => savePatch({ cdpEnabled: e.target.checked }));
-  $('btnSavePort').addEventListener('click', () => {
-    const port = Number($('inputPort').value);
-    if (Number.isInteger(port) && port >= 1024 && port <= 65535) {
-      savePatch({ cdpPort: port });
-    }
-  });
   $('selectCtxFormat').addEventListener('change', (e) => savePatch({ contextDisplayFormat: e.target.value }));
   $('selectWindowCap').addEventListener('change', (e) => {
     const val = e.target.value === 'auto' ? 'auto' : Number(e.target.value);
