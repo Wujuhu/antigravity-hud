@@ -87,7 +87,7 @@ fi
 
 # If Antigravity is running without the CDP port, prompt the user cleanly
 if pgrep -x "Antigravity" >/dev/null 2>&1; then
-  osascript -e 'display dialog "检测到 Antigravity 已在运行但未开启 CDP 调试端口。请先完全退出 (Cmd + Q) Antigravity，再双击本启动器重新打开。" buttons {"知道了"} default button "知道了" with title "AGY HUD (CDP 启动器)"' >/dev/null 2>&1 || true
+  osascript -e 'display dialog "检测到 Antigravity 已在运行但未开启 CDP 调试端口。请先完全退出 (Cmd + Q) Antigravity，再双击本启动器重新打开。" buttons {"知道了"} default button "知道了" with title "AGY HUD"' >/dev/null 2>&1 || true
   exit 0
 fi
 
@@ -156,6 +156,16 @@ export async function generateMacCdpLauncher({
     { encoding: 'utf8', mode: 0o755 },
   );
   await fsp.chmod(scriptPath, 0o755).catch(() => {});
+
+  // Touch bundle root so macOS Finder refreshes AppIcon.icns immediately
+  const now = new Date();
+  await fsp.utimes(bundleDir, now, now).catch(() => {});
+
+  // Clean up legacy wrapper name if upgrading from older release
+  const legacyBundleDir = path.join(applicationsDir, 'Antigravity (CDP).app');
+  if (legacyBundleDir !== bundleDir && fs.existsSync(legacyBundleDir)) {
+    await fsp.rm(legacyBundleDir, { recursive: true, force: true }).catch(() => {});
+  }
 
   return {
     platform: 'darwin',
