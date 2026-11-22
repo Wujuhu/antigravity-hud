@@ -1,0 +1,12 @@
+{
+  "name": "agy-hud",
+  "displayName": "AGY HUD",
+  "description": "Minimal Antigravity composer HUD displaying customizable live context, token usage, generation speed, cache hit rate, and quota with hover breakdown cards.",
+  "version": "1.0.0",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "打开 AGY HUD 设置面板查看实时遥测与排序配置",
+    "检查当前对话上下文占用、缓存命中率与生成速率",
+    "生成当前系统的 Antigravity CDP 快捷启动器"
+  ]
+}

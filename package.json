@@ -1,0 +1,28 @@
+{
+  "name": "agy-hud",
+  "version": "1.0.0",
+  "private": false,
+  "type": "module",
+  "description": "Minimal cross-platform Antigravity composer HUD plugin showing live context, tokens, speed, prompt cache, and quota with customizable items and ordering.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "install:plugin": "node scripts/install.mjs",
+    "uninstall:plugin": "node scripts/uninstall.mjs",
+    "preview": "node scripts/preview_hud.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "keywords": [
+    "antigravity",
+    "agy",
+    "plugin",
+    "sidecar",
+    "hud",
+    "cdp",
+    "telemetry",
+    "quota",
+    "context"
+  ]
+}

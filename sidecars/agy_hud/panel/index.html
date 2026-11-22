@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AGY HUD</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-dot" id="statusDot"></span>
+        <div>
+          <h1>AGY HUD</h1>
+          <p class="sub" id="statusSub">正在同步遥测状态...</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="btn btn-ghost" id="btnRefresh" title="立即刷新遥测与配额">刷新</button>
+        <button class="btn btn-ghost" id="btnReset" title="恢复默认显示项与顺序">重置</button>
+      </div>
+    </header>
+
+    <!-- 1. CDP 与启动器 -->
+    <section class="card">
+      <div class="card-head">
+        <h2>CDP 输入栏注入与启动器</h2>
+        <label class="switch">
+          <input type="checkbox" id="chkCdpEnabled" checked />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="field-row">
+        <label for="inputPort">CDP 调试端口</label>
+        <div class="port-group">
+          <input id="inputPort" type="number" min="1024" max="65535" value="9229" />
+          <button class="btn btn-primary" id="btnSavePort">应用</button>
+        </div>
+      </div>
+
+      <div class="launcher-box">
+        <div class="launcher-actions">
+          <button class="btn btn-accent" id="btnGenerateLauncher">一键生成 CDP 启动器</button>
+          <span class="platform-tag" id="platformTag">--</span>
+        </div>
+        <p class="hint" id="launcherHint">
+          开启 CDP 注入需彻底退出 Antigravity 后，通过带 <code>--remote-debugging-port</code> 参数的启动器重新打开。
+        </p>
+        <div class="launcher-result" id="launcherResult" hidden></div>
+      </div>
+    </section>
+
+    <!-- 2. 常驻胶囊数据与排序 -->
+    <section class="card">
+      <div class="card-head">
+        <h2>输入栏常驻胶囊（勾选显隐 · 拖拽或点箭头排序）</h2>
+      </div>
+
+      <div class="field-grid">
+        <div class="field-col">
+          <label for="selectCtxFormat">上下文显示格式</label>
+          <select id="selectCtxFormat">
+            <option value="percent">百分比（如 24%）</option>
+            <option value="tokens">Token 数（如 124k）</option>
+            <option value="both">百分比 + Token（如 24% · 124k）</option>
+          </select>
+        </div>
+        <div class="field-col">
+          <label for="selectWindowCap">上下文窗口上限</label>
+          <select id="selectWindowCap">
+            <option value="auto">自动（优先会话元数据）</option>
+            <option value="256000">256k</option>
+            <option value="512000">512k</option>
+            <option value="1048576">1M</option>
+          </select>
+        </div>
+      </div>
+
+      <ul class="sortable-list" id="pillItemsList"></ul>
+    </section>
+
+    <!-- 3. 悬停浮层区块与排序 -->
+    <section class="card">
+      <div class="card-head">
+        <h2>悬停（Hover）详情浮层区块与顺序</h2>
+      </div>
+      <ul class="sortable-list" id="popoverSectionsList"></ul>
+    </section>
+
+    <!-- 4. 实时遥测快照（免 CDP 也可直接查看） -->
+    <section class="card">
+      <div class="card-head">
+        <h2>实时遥测快照</h2>
+        <span class="badge" id="modelBadge">--</span>
+      </div>
+      <div id="liveSnapshotBody" class="snapshot-body">加载中...</div>
+    </section>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
