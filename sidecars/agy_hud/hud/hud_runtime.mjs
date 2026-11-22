@@ -168,6 +168,11 @@ export function buildHudCss() {
   color: var(--pop-muted);
   font-size: 11px;
 }
+#${HUD_POPOVER_ID} .agy-ctx-stat {
+  color: var(--pop-text);
+  font-size: 11.5px;
+  font-weight: 400;
+}
 #${HUD_POPOVER_ID} .agy-bar-track {
   width: 100%;
   height: 5px;
@@ -511,8 +516,9 @@ export function buildHudInjectExpression(snapshot, config) {
         } else if (id === 'tokens') {
           segments.push('<span class="agy-hud-seg">' + esc(fmtTok(cac.cumulativeTotalTokens)) + '</span>');
         } else if (id === 'model') {
-          if (mdl.id) {
-            segments.push('<span class="agy-hud-seg agy-hud-muted agy-hud-model">' + esc(mdl.id) + '</span>');
+          var mName = mdl.label || mdl.id;
+          if (mName && mName !== '待会话开始') {
+            segments.push('<span class="agy-hud-seg agy-hud-muted agy-hud-model">' + esc(mName) + '</span>');
           }
         }
       }
@@ -567,9 +573,9 @@ export function buildHudInjectExpression(snapshot, config) {
           blocks.push(
             '<div class="agy-sec">' +
               '<div class="agy-row">' +
-                '<span class="agy-title">' + esc(mdl.id || mdl.label || '上下文') + '</span>' +
+                '<span class="agy-title">' + esc(mdl.label || mdl.id || '上下文') + '</span>' +
                 '<span class="agy-head-right">' +
-                  '<span class="agy-muted">' + esc(fmtTok(ctx.usedTokens)) + ' / ' + esc(fmtTok(ctx.contextLimit)) + ' · ' + esc(pct.toFixed(1)) + '%' + compHtml + '</span>' +
+                  '<span class="agy-ctx-stat">' + esc(fmtTok(ctx.usedTokens)) + ' / ' + esc(fmtTok(ctx.contextLimit)) + ' · ' + esc(pct.toFixed(1)) + '%' + compHtml + '</span>' +
                   sidecarBtn +
                 '</span>' +
               '</div>' +

@@ -8,6 +8,19 @@
 
 import { DEFAULT_CDP_PORT } from './config.mjs';
 
+const CONV_URL_PATH_RE = /\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+const CONV_URL_QUERY_RE = /[?&]conversationId=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+
+export function extractConversationIdFromUrl(url = '') {
+  const s = String(url || '').trim();
+  if (!s) return '';
+  const mPath = s.match(CONV_URL_PATH_RE);
+  if (mPath) return mPath[1].toLowerCase();
+  const mQuery = s.match(CONV_URL_QUERY_RE);
+  if (mQuery) return mQuery[1].toLowerCase();
+  return '';
+}
+
 export function isAntigravityAppTarget(target) {
   if (!target || !target.webSocketDebuggerUrl) return false;
   const tType = String(target.type || '').toLowerCase();
@@ -25,7 +38,8 @@ export function isAntigravityAppTarget(target) {
     low.startsWith('chrome://') ||
     low.startsWith('about:') ||
     low.startsWith('blob:') ||
-    low.startsWith('data:')
+    low.startsWith('data:') ||
+    low.startsWith('plugin://')
   ) {
     return false;
   }
@@ -180,27 +194,39 @@ export function cdpEvaluate(wsUrl, expression, { timeoutMs = 2500 } = {}) {
 
 export async function pushExpressionToTargets({
   port = DEFAULT_CDP_PORT,
-  expression,
+  expression = '',
+  buildExpressionForTarget = null,
+  targetsOverride = null,
   timeoutMs = 2500,
 } = {}) {
-  const discovery = await listCdpTargets(port, { timeoutMs: Math.min(timeoutMs, 1500) });
+  const discovery = targetsOverride
+    ? { ok: true, targets: targetsOverride }
+    : await listCdpTargets(port, { timeoutMs: Math.min(timeoutMs, 1500) });
   if (!discovery.ok) {
     return {
       connected: false,
       port,
       injectedCount: 0,
       anchorFound: false,
+      detectedConversationId: '',
       error: discovery.error || `CDP 端口 :${port} 未就绪`,
     };
   }
 
   let injectedCount = 0;
   let anchorFound = false;
+  let detectedConversationId = '';
   let lastError = '';
 
   for (const target of discovery.targets) {
     try {
-      const val = await cdpEvaluate(target.webSocketDebuggerUrl, expression, { timeoutMs });
+      const targetConvId = extractConversationIdFromUrl(target.url);
+      if (targetConvId) detectedConversationId = targetConvId;
+      const expr = typeof buildExpressionForTarget === 'function'
+        ? await buildExpressionForTarget(target, targetConvId)
+        : expression;
+      if (!expr) continue;
+      const val = await cdpEvaluate(target.webSocketDebuggerUrl, expr, { timeoutMs });
       injectedCount += 1;
       if (val && val.mounted) {
         anchorFound = true;
@@ -216,6 +242,7 @@ export async function pushExpressionToTargets({
     targetCount: discovery.targets.length,
     injectedCount,
     anchorFound,
+    detectedConversationId,
     error: injectedCount === 0 ? lastError || '未找到 Antigravity 主窗口页面' : '',
   };
 }

@@ -18,7 +18,11 @@ import {
 } from './backend/config.mjs';
 import { createQuotaClient } from './backend/quota.mjs';
 import { collectLiveSnapshot } from './backend/telemetry_aggregator.mjs';
-import { pushExpressionToTargets } from './backend/cdp_bridge.mjs';
+import {
+  extractConversationIdFromUrl,
+  listCdpTargets,
+  pushExpressionToTargets,
+} from './backend/cdp_bridge.mjs';
 import { generateWindowsCdpLauncher } from './backend/launcher_win.mjs';
 import { generateMacCdpLauncher } from './backend/launcher_mac.mjs';
 import {
@@ -76,38 +80,94 @@ async function syncOnce({ forceQuota = false } = {}) {
   syncInFlight = true;
   try {
     const config = configStore.get();
-    // Background HUD sync stays lightweight: never scan 7-day weekly usage here
-    const snapshot = await collectLiveSnapshot({
-      conversationId: activeConversationId,
-      quotaClient,
-      config,
-      forceQuota,
-      includeWeeklyEstimate: false,
-    });
-    latestSnapshot = snapshot;
 
-    // O(1) in-memory anchor check (never reads transcript logs) so ad-hoc/natural
-    // quota resets are captured immediately even while the sidecar panel is closed.
-    if (snapshot?.quota?.available && Array.isArray(snapshot.quota.groups)) {
-      quotaAnchorStore.observe(snapshot.quota.groups);
+    // Fetch quota once per sync cycle (cached internally by quotaClient)
+    let quotaSummary = null;
+    try {
+      quotaSummary = await quotaClient.getQuotaSummary({ force: forceQuota });
+    } catch {
+      quotaSummary = null;
     }
 
-    if (config.cdpEnabled) {
-      const expr = buildHudInjectExpression(snapshot, config);
-      latestCdpStatus = await pushExpressionToTargets({
-        port: config.cdpPort,
-        expression: expr,
+    const snapCache = new Map();
+    const getSnapshotForConv = async (convId, allowFallbackRecent) => {
+      const cacheKey = `${convId || ''}|${allowFallbackRecent ? '1' : '0'}`;
+      if (snapCache.has(cacheKey)) return snapCache.get(cacheKey);
+      const snap = await collectLiveSnapshot({
+        conversationId: convId,
+        allowFallbackRecent,
+        quotaClient,
+        quotaSummaryOverride: quotaSummary,
+        config,
+        forceQuota: false,
+        includeWeeklyEstimate: false,
       });
+      snapCache.set(cacheKey, snap);
+      return snap;
+    };
+
+    let primarySnapshot = null;
+
+    if (config.cdpEnabled) {
+      const discovery = await listCdpTargets(config.cdpPort, { timeoutMs: 1500 });
+      if (discovery.ok && discovery.targets.length > 0) {
+        let lastTargetSnap = null;
+        latestCdpStatus = await pushExpressionToTargets({
+          port: config.cdpPort,
+          targetsOverride: discovery.targets,
+          buildExpressionForTarget: async (target, targetConvId) => {
+            // If target URL is an Antigravity loopback web app without /c/<uuid>, it's a fresh/home view
+            const lowUrl = String(target.url || '').toLowerCase();
+            const isWebAppHome =
+              !targetConvId &&
+              (lowUrl.startsWith('https://127.0.0.1:') ||
+                lowUrl.startsWith('https://localhost:') ||
+                lowUrl.startsWith('http://127.0.0.1:') ||
+                lowUrl.startsWith('http://localhost:'));
+            const convToUse = targetConvId || (isWebAppHome ? '' : activeConversationId);
+            const allowFallback = !isWebAppHome;
+            const snap = await getSnapshotForConv(convToUse, allowFallback);
+            lastTargetSnap = snap;
+            return buildHudInjectExpression(snap, config);
+          },
+        });
+        if (latestCdpStatus.detectedConversationId) {
+          activeConversationId = latestCdpStatus.detectedConversationId;
+        }
+        primarySnapshot = lastTargetSnap;
+      } else {
+        latestCdpStatus = {
+          connected: false,
+          port: config.cdpPort,
+          injectedCount: 0,
+          anchorFound: false,
+          detectedConversationId: '',
+          error: discovery.error || `CDP 端口 :${config.cdpPort} 未就绪`,
+        };
+      }
     } else {
       latestCdpStatus = {
         connected: false,
         port: config.cdpPort,
         injectedCount: 0,
         anchorFound: false,
+        detectedConversationId: '',
         error: '已在设置中暂停 CDP 注入',
       };
     }
-    return snapshot;
+
+    if (!primarySnapshot) {
+      primarySnapshot = await getSnapshotForConv(activeConversationId, true);
+    }
+    latestSnapshot = primarySnapshot;
+
+    // O(1) in-memory anchor check (never reads transcript logs) so ad-hoc/natural
+    // quota resets are captured immediately even while the sidecar panel is closed.
+    if (primarySnapshot?.quota?.available && Array.isArray(primarySnapshot.quota.groups)) {
+      quotaAnchorStore.observe(primarySnapshot.quota.groups);
+    }
+
+    return primarySnapshot;
   } finally {
     syncInFlight = false;
   }
@@ -115,7 +175,8 @@ async function syncOnce({ forceQuota = false } = {}) {
 
 function restartPollingLoop() {
   if (pollTimer) clearInterval(pollTimer);
-  const interval = configStore.get().pollIntervalMs || 1800;
+  const configured = configStore.get().pollIntervalMs || 1200;
+  const interval = Math.max(800, Math.min(configured, 1200));
   pollTimer = setInterval(() => {
     syncOnce().catch(() => {});
   }, interval);

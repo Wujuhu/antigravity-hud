@@ -366,7 +366,7 @@ async function snap(urlPath, outName, width, height) {
 try {
   await snap('/hud-dark', 'hud-hover-dark.png', 860, 410);
   await snap('/hud-light', 'hud-hover-light.png', 860, 410);
-  await snap('/panel', 'sidecar-panel.png', 520, 480);
+  await snap('/panel', 'sidecar-panel.png', 520, 410);
 } finally {
   server.close();
 }

@@ -212,12 +212,23 @@
     return `当前未处于 CDP 注入状态。请彻底退出 Antigravity 后，使用带 --remote-debugging-port=${port || 9229} 参数的命令重新启动。`;
   }
 
+  function buildLauncherSuccessMessage(platform) {
+    if (platform === 'darwin') {
+      return '已生成 macOS 启动器。请按 Cmd+Q 彻底退出 Antigravity，再打开下方 .app 应用重新启动：';
+    }
+    if (platform === 'win32') {
+      return '已生成 Windows 启动器。请彻底退出 Antigravity（含托盘图标），再双击下方快捷方式重新启动：';
+    }
+    return '已生成启动命令。请彻底退出 Antigravity 后使用下方命令重新启动：';
+  }
+
   function render() {
     if (!state) return;
     const { config, cdpStatus, platform, launcherInfo, catalogs, snapshot, currentVersion, updateStatus } = state;
 
     const dot = $('statusDot');
     const badge = $('cdpStateText');
+    const repairArea = $('cdpRepairArea');
     const alertEl = $('cdpAlertText');
     const isConnected = Boolean(cdpStatus?.connected);
 
@@ -228,11 +239,11 @@
 
     if (isConnected) {
       badge.textContent = '正常';
-      alertEl.hidden = true;
+      repairArea.hidden = true;
     } else {
       badge.textContent = '异常';
+      repairArea.hidden = false;
       alertEl.textContent = buildCdpAlertMessage(platform, config?.cdpPort);
-      alertEl.hidden = false;
     }
 
     $('btnGenerateLauncherLabel').textContent =
@@ -242,10 +253,14 @@
           ? '生成 macOS 启动器 (.app)'
           : '显示启动命令';
 
-    if (launcherInfo) {
-      const box = $('launcherResult');
+    if (launcherInfo && !isConnected) {
+      const box = $('launcherResultBox');
       box.hidden = false;
-      box.textContent = launcherInfo.lnkPath || launcherInfo.bundlePath || launcherInfo.manualCommand || '';
+      $('launcherResultMsg').textContent = buildLauncherSuccessMessage(platform);
+      $('launcherResult').textContent =
+        launcherInfo.lnkPath || launcherInfo.bundlePath || launcherInfo.manualCommand || '';
+    } else {
+      $('launcherResultBox').hidden = true;
     }
 
     $('versionBadge').textContent = `v${currentVersion || '1.0.0'}`;

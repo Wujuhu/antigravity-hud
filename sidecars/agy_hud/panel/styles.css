@@ -18,6 +18,8 @@
   --switch-knob-off: #9aa0aa;
   --switch-knob-on: #111215;
   --ok: #5ec285;
+  --ok-bg: rgba(94, 194, 133, 0.08);
+  --ok-border: rgba(94, 194, 133, 0.24);
   --err: #e06c75;
   --err-bg: rgba(224, 108, 117, 0.08);
   --err-border: rgba(224, 108, 117, 0.22);
@@ -47,6 +49,8 @@
     --switch-knob-off: #ffffff;
     --switch-knob-on: #ffffff;
     --ok: #1d9a54;
+    --ok-bg: rgba(29, 154, 84, 0.07);
+    --ok-border: rgba(29, 154, 84, 0.22);
     --err: #c5221f;
     --err-bg: rgba(197, 34, 31, 0.06);
     --err-border: rgba(197, 34, 31, 0.18);
@@ -698,11 +702,27 @@ select option {
   color: var(--muted);
 }
 
+.cdp-success {
+  margin-top: 2px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: var(--ok-bg);
+  border: 1px solid var(--ok-border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cdp-success-msg {
+  font-size: 11px;
+  color: var(--ok);
+  line-height: 1.4;
+}
+
 .path-note {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 10px;
-  color: var(--muted);
-  padding: 0 2px;
+  color: var(--text-soft);
   word-break: break-all;
   line-height: 1.4;
 }

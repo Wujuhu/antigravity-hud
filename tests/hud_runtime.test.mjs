@@ -5,14 +5,20 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { createDefaultConfig } from '../sidecars/agy_hud/backend/config.mjs';
-import { assembleHudSnapshot } from '../sidecars/agy_hud/backend/telemetry_aggregator.mjs';
+import {
+  assembleHudSnapshot,
+  formatCleanModelName,
+} from '../sidecars/agy_hud/backend/telemetry_aggregator.mjs';
 import {
   HUD_POPOVER_ID,
   HUD_ROOT_ID,
   buildHudInjectExpression,
   buildHudRemoveExpression,
 } from '../sidecars/agy_hud/hud/hud_runtime.mjs';
-import { isAntigravityAppTarget } from '../sidecars/agy_hud/backend/cdp_bridge.mjs';
+import {
+  extractConversationIdFromUrl,
+  isAntigravityAppTarget,
+} from '../sidecars/agy_hud/backend/cdp_bridge.mjs';
 import { installPlugin } from '../scripts/install.mjs';
 import { uninstallPlugin } from '../scripts/uninstall.mjs';
 
@@ -68,13 +74,23 @@ test('isAntigravityAppTarget filters DevTools and AGY HUD sidecar while allowing
   );
   assert.equal(
     isAntigravityAppTarget({
-      type: 'page',
-      title: 'DevTools',
-      url: 'devtools://devtools/bundled/inspector.html',
-      webSocketDebuggerUrl: 'ws://127.0.0.1:9229/devtools/page/3',
+      type: 'iframe',
+      title: 'plugin://agy-hud--agy_hud-1757/',
+      url: 'plugin://agy-hud--agy_hud-1757/?token=abc',
+      webSocketDebuggerUrl: 'ws://127.0.0.1:9229/devtools/page/4',
     }),
     false,
   );
+  assert.equal(
+    extractConversationIdFromUrl(
+      'https://127.0.0.1:14626/c/f3462d83-e5ba-42d0-8339-c69c10bef587?project=12973ce6-3375-48d0-b7c9-fdc2cc7ab053',
+    ),
+    'f3462d83-e5ba-42d0-8339-c69c10bef587',
+  );
+  assert.equal(extractConversationIdFromUrl('https://127.0.0.1:14626/'), '');
+  assert.equal(formatCleanModelName('gemini-4-neon-high'), 'Gemini 4 Neon');
+  assert.equal(formatCleanModelName('claude-sonnet-4-6-high'), 'Claude Sonnet 4.6');
+  assert.equal(formatCleanModelName('gpt-oss-120b-medium'), 'GPT-OSS 120B');
 });
 
 test('installPlugin and uninstallPlugin work cleanly in an isolated temp directory', async () => {

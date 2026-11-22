@@ -11,6 +11,53 @@ import {
 } from './weekly_usage.mjs';
 
 /**
+ * Format a raw model slug or label into clean Title Case without thinking effort suffixes.
+ * e.g. "gemini-4-neon-high" -> "Gemini 4 Neon", "claude-sonnet-4-6-high" -> "Claude Sonnet 4.6"
+ */
+export function formatCleanModelName(rawModel = '') {
+  const raw = String(rawModel || '').trim();
+  if (!raw) return '';
+
+  let s = raw
+    .replace(/\s*\((?:extra[- ]?low|low|medium|high|xhigh|tiered)\)\s*$/i, '')
+    .trim();
+
+  // If already human-readable with spaces (and not slug-like)
+  if (s.includes(' ') && !/^[a-z0-9]+-[a-z0-9-]+$/i.test(s)) {
+    return s;
+  }
+
+  const slug = s
+    .toLowerCase()
+    .replace(/-(?:tiered-)?(?:extra-low|low|medium|high|xhigh|tiered)$/i, '')
+    .replace(/-tiered$/i, '');
+
+  if (slug === 'gemini-pro-orchestrator') return 'Orchestrator Carbon';
+  if (slug === 'gemini-pro-orchestrator-argon') return 'Orchestrator Argon';
+  if (slug === 'gemini-flash-worker-agy') return 'Gemini Flash Worker';
+
+  const claudeMatch = slug.match(/^claude-(opus|sonnet|haiku)-(\d+)(?:-(\d+))?/);
+  if (claudeMatch) {
+    const tier = claudeMatch[1].charAt(0).toUpperCase() + claudeMatch[1].slice(1);
+    const ver = claudeMatch[3] ? `${claudeMatch[2]}.${claudeMatch[3]}` : claudeMatch[2];
+    return `Claude ${tier} ${ver}`;
+  }
+
+  if (slug.startsWith('gpt-oss-')) {
+    return slug.replace(/^gpt-oss-/, 'GPT-OSS ').toUpperCase();
+  }
+  if (slug.startsWith('gpt-')) {
+    return 'GPT-' + slug.slice(4).split('-').map((p) => (/^\d/.test(p) ? p : p.charAt(0).toUpperCase() + p.slice(1))).join(' ');
+  }
+
+  return slug
+    .split('-')
+    .filter(Boolean)
+    .map((part) => (/^\d/.test(part) ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+    .join(' ');
+}
+
+/**
  * Match a model ID string to one of the normalized quota group keys.
  */
 export function matchModelToQuotaGroupKey(modelId = '') {
@@ -179,7 +226,10 @@ export function assembleHudSnapshot({
     (speedMetrics?.upstreamModelId && String(speedMetrics.upstreamModelId).trim()) ||
     contextSnap?.model?.id ||
     '';
-  const modelLabel = contextSnap?.model?.label || modelId || '待会话开始';
+  const modelLabel =
+    formatCleanModelName(modelId) ||
+    formatCleanModelName(contextSnap?.model?.label) ||
+    '待会话开始';
 
   const breakdown = buildBreakdownCategories(contextSnap?.categories || {}, usedTokens, contextLimit);
 
@@ -281,8 +331,10 @@ export function assembleHudSnapshot({
  */
 export async function collectLiveSnapshot({
   conversationId = '',
+  allowFallbackRecent = true,
   workspaceUris = [],
   quotaClient = null,
+  quotaSummaryOverride = null,
   config = {},
   forceQuota = false,
   includeWeeklyEstimate = false,
@@ -290,8 +342,7 @@ export async function collectLiveSnapshot({
   const requested = typeof conversationId === 'string' ? conversationId.trim() : '';
   const convId =
     (requested && ID_RE.test(requested) ? requested : '') ||
-    listRecentConversations(1)[0]?.id ||
-    '';
+    (allowFallbackRecent ? listRecentConversations(1)[0]?.id || '' : '');
 
   let contextSnap = null;
   let speedMetrics = null;
@@ -306,8 +357,8 @@ export async function collectLiveSnapshot({
     }
   }
 
-  let quotaSummary = null;
-  if (quotaClient && typeof quotaClient.getQuotaSummary === 'function') {
+  let quotaSummary = quotaSummaryOverride;
+  if (!quotaSummary && quotaClient && typeof quotaClient.getQuotaSummary === 'function') {
     try {
       quotaSummary = await quotaClient.getQuotaSummary({ force: forceQuota });
     } catch {
