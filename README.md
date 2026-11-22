@@ -6,26 +6,16 @@
 
 ---
 
-## 界面预览（已脱敏实景）
+## 界面预览（真实使用截图）
 
-### 输入栏常驻胶囊 + Hover 详情浮层（自动适配深 / 浅主题）
-
-| 深色主题 | 浅色主题 |
-| :---: | :---: |
-| ![AGY HUD 深色主题输入栏胶囊与悬停详情卡](docs/screenshots/hud-hover-dark.png) | ![AGY HUD 浅色主题输入栏胶囊与悬停详情卡](docs/screenshots/hud-hover-light.png) |
-
-### 右侧辅助边栏（Sidecar）：拖拽排序 · 自动更新 · 按需周额度估算
-
-<p align="center">
-  <img src="docs/screenshots/sidecar-panel.png" alt="AGY HUD 右侧辅助边栏设置与按需周额度估算面板" width="440" />
-</p>
+> 请将真实使用中的界面截图放入 `docs/screenshots/` 目录（如 `hud-hover.png`、`turn-summary.png`、`sidecar-panel.png`）。
 
 ---
 
 ## 跨平台统一架构（Windows & macOS 双版本）
 
 为降低双端维护成本，本项目采用**单一跨平台框架代码库**：
-* **95%+ 跨平台共享**：Sidecar 后端、本地会话解析、速率统计、原生配额客户端、周额度按需估算、GitHub 自更新引擎、CDP WebSocket 注入桥、输入栏 HUD、右侧边栏 UI 以及 `scripts/install.mjs` / `uninstall.mjs` 全部基于 **Node.js 22+ 内置 API 与标准 Web/CDP** 实现，Windows 与 macOS 共用同一套代码。
+* **95%+ 跨平台共享**：Sidecar 后端、SQLite 纳秒级纯流式 TPS 与每轮汇总引擎、本地会话解析、原生配额客户端、周额度按需估算、GitHub 自更新引擎、CDP WebSocket 注入桥、输入栏 HUD、界面紧凑排版注入、右侧边栏 UI 以及 `scripts/install.mjs` / `uninstall.mjs` 全部基于 **Node.js 22+ 内置 API 与标准 Web/CDP** 实现，Windows 与 macOS 共用同一套代码。
 * **仅启动器外壳按系统适配**：
   * **Windows**：生成无黑窗桌面快捷方式 `Antigravity (HUD).lnk`（配合静默 `.vbs`）。
   * **macOS**：在 `~/Applications/` 生成套壳 `Antigravity (HUD).app`（复用官方 `.icns` 图标，不破坏苹果代码签名与自动更新）。
@@ -34,16 +24,17 @@
 
 ## 核心功能
 
-* **输入栏紧凑胶囊（可自定义数据与顺序）**：挂载在权限选择器（如 `Turbo ▾`）左侧，采用与 Antigravity 一致的克制中性风格，默认展示 **上下文圆环占比 · 实时生成速率 (`tok/s`) · 当前模型额度**，可选开启 **本轮缓存命中率 / 会话累计 Token / 真实上游模型**，支持拖拽或按钮排序。
-* **极简悬停（Hover）详情浮层（可自定义区块与顺序）**：去掉多余说明与视觉噪音，让排版自然表达信息：
-  * **合体上下文进度条**：在同一条窗口进度条内按低饱和官方色阶直接呈现 5 类构成（系统 / 规则 / 对话 / 工具 / 思考）与总占用占比。
+* **输入栏紧凑 HUD（悬停浮现边框，可自定义数据与顺序）**：挂载在权限选择器（如 `Turbo ▾`）左侧，平时无边框自然融于输入栏，鼠标悬停时浮现柔和椭圆边框；默认展示 **Context 圆环占比 · 纳秒级纯流式 TPS · 5h 额度**，可选开启 **周额度 / 缓存命中率 / 会话总计 / 上游模型**，支持拖拽或按钮排序，且通过 CDP URL 实时跟随当前切换的对话。
+* **极简悬停（Hover）详情浮层**：
+  * **合体上下文进度条**：在同一条窗口进度条内按低饱和官方色阶呈现 5 类构成（系统 / 规则 / 对话 / 工具 / 思考）、已用/上限与压缩次数；右上角自带一键打开右侧边栏图标。
   * **速率与 Prompt 缓存**：本轮速率、会话均值、本轮输出、**本轮缓存命中率**与**总缓存命中率**。
-  * **统一圆环额度（自适应 Free / Pro / Ultra）**：无横向进度条，5 小时、周及其他订阅档位配额桶全部采用统一的微型圆环 + 百分比 + 倒计时动态渲染。
-* **右侧边栏（Sidecar）按需深度统计 — 零后台开销**：
-  * **周额度总 Token 与费用估算**：通过「`resetTime` 周期对齐 + 差分锚点」同时兼顾自然重置与官方主动重置/回补，全程使用精确浮点比例计算；只要净消耗变化 `>= 1%` 即自动按比例反推各分组**周额度总 Token 与总费用估算**。
-  * **严格按需计算**：后台仅做 `O(1)` 数值锚点比对，绝不扫描日志；仅在打开右侧 `AGY HUD` 边栏时才按需扫描统计。
-* **检查与自动更新**：支持手动检查/升级，或开启定时自动检查与发现新版自动更新（保留全部配置）。
-* **跨平台零侵入 CDP 启动器**：Windows 自动生成无黑窗桌面 `Antigravity (HUD).lnk`；macOS 自动在 `~/Applications/` 生成套壳 `Antigravity (HUD).app`（复用官方图标，不破坏苹果签名）。
+  * **垂直对齐统一圆环额度（自适应 Free / Pro / Ultra）**：5 小时、周及其他配额桶全部采用统一微型圆环 + 定宽百分比 + 倒计时网格对齐展示。
+* **每轮对话底部总信息栏**：与官方复制/点赞工具栏同行排布，展示该**整轮所有调用的汇总数据**（模型名 · 思考强度 · 缓存命中率 · 总耗时 · 整轮流式 TPS · 总花费 Token · 等价总金额），窄屏自动优雅折行。
+* **界面排版三档调节**：支持 **舒适 / 原版 / 紧凑** 三档一键切换，并支持自定义行间距、段间距与列表间距滑块实时微调。
+* **右侧边栏（Sidecar）按需周额度估算与自动更新**：
+  * 仅在打开右侧 `AGY HUD` 边栏时按需扫描计算各分组已消耗与周额度估算（后台零日志扫描开销）。
+  * 支持手动/定时检查更新与发现新版自动更新（保留全部配置）。
+* **跨平台零侵入 CDP 启动器**：Windows 自动生成桌面 `Antigravity (HUD).lnk`；macOS 自动在 `~/Applications/` 生成套壳 `Antigravity (HUD).app`。
 
 ---
 
@@ -115,10 +106,11 @@
 ```bash
 npm test         # 运行全部离线单元测试
 npm run preview  # 生成 preview-output/hud-preview.html，浏览器直接预览亮/暗主题与 Hover 卡片
-npm run screenshots  # 使用本机浏览器以脱敏数据重新截取 docs/screenshots/ 下的高清 UI 预览图
 ```
 
 本项目遵循 MIT 协议并复用了以下优秀开源社区模块（完整声明见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)）：
 * [ahmetdotsh/agy-context](https://github.com/ahmetdotsh/agy-context)（MIT）— 上下文上限、构成拆解与本轮/总缓存命中率
 * [ahmetdotsh/agy-usage](https://github.com/ahmetdotsh/agy-usage)（MIT）— 模型等价 API 费率表参考
-* [aishadiaodeqishui/agy-monitor](https://github.com/aishadiaodeqishui/agy-monitor)（MIT）— 原生配额通道、速率算法、CDP 桥接、Windows 启动器与自更新机制
+* [aishadiaodeqishui/agy-monitor](https://github.com/aishadiaodeqishui/agy-monitor)（MIT）— 原生配额通道、CDP 桥接、Windows 启动器与自更新机制
+* [nkjDSLcvanv/antigravity-codex-theme](https://github.com/nkjDSLcvanv/antigravity-codex-theme)（MIT）— SQLite 纳秒级纯流式 TPS 解码与每轮反馈栏匹配逻辑
+* [WhiteBr1ck/agy-powertools](https://github.com/WhiteBr1ck/agy-powertools)（MIT）— Antigravity 2.0 界面紧凑排版 CSS 规则参考

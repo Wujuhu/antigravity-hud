@@ -20,7 +20,6 @@
     "install:plugin": "node scripts/install.mjs",
     "uninstall:plugin": "node scripts/uninstall.mjs",
     "preview": "node scripts/preview_hud.mjs",
-    "screenshots": "node scripts/capture_screenshots.mjs",
     "test": "node --test tests/*.test.mjs"
   },
   "keywords": [
