@@ -69,13 +69,17 @@ export async function createWindowsShortcutLnk({
   workingDir = '',
   description = 'Antigravity (CDP HUD)',
 }) {
-  const helperVbs = `${lnkPath}.mk.vbs`;
+  const helperVbs = path.join(
+    os.tmpdir(),
+    `agy-hud-mklnk-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.vbs`,
+  );
   const script = [
     'Set sh = CreateObject("WScript.Shell")',
     `Set sc = sh.CreateShortcut("${escapeVbsString(lnkPath)}")`,
     `sc.TargetPath = "${escapeVbsString(targetPath)}"`,
     args ? `sc.Arguments = "${escapeVbsString(args)}"` : '',
     workingDir ? `sc.WorkingDirectory = "${escapeVbsString(workingDir)}"` : '',
+    `sc.IconLocation = "${escapeVbsString(targetPath)},0"`,
     `sc.Description = "${escapeVbsString(description)}"`,
     'sc.WindowStyle = 1',
     'sc.Save',
@@ -142,13 +146,23 @@ export async function generateWindowsCdpLauncher({
       description: desc,
     });
     if (createDesktopShortcut && fs.existsSync(desktopDir)) {
-      desktopLnkCreated = await createWindowsShortcutLnk({
-        lnkPath: desktopLnkPath,
-        targetPath: detected.exePath,
-        args,
-        workingDir: workDir,
-        description: desc,
-      });
+      if (lnkCreated) {
+        try {
+          await fsp.copyFile(lnkPath, desktopLnkPath);
+          desktopLnkCreated = fs.existsSync(desktopLnkPath);
+        } catch {
+          desktopLnkCreated = false;
+        }
+      }
+      if (!desktopLnkCreated) {
+        desktopLnkCreated = await createWindowsShortcutLnk({
+          lnkPath: desktopLnkPath,
+          targetPath: detected.exePath,
+          args,
+          workingDir: workDir,
+          description: desc,
+        });
+      }
     }
   }
 
