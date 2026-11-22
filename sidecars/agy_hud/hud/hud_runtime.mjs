@@ -321,23 +321,21 @@ export function buildHudCss() {
   gap: 3px 6px;
   margin-right: auto;
   padding-left: 4px;
-  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 12px;
-  line-height: 1.45;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.3333;
   font-variant-numeric: tabular-nums;
-  color: rgba(232, 234, 237, 0.64);
+  color: var(--muted-foreground, rgba(168, 169, 178, 0.92));
   box-sizing: border-box;
   user-select: text;
 }
 .agy-turn-summary-bar .agy-turn-sep {
-  color: rgba(255, 255, 255, 0.24);
+  opacity: 0.42;
   user-select: none;
 }
-.agy-turn-summary-bar[data-agy-theme="light"] .agy-turn-sep {
-  color: rgba(0, 0, 0, 0.22);
-}
 .agy-turn-summary-bar[data-agy-theme="light"] {
-  color: rgba(24, 25, 27, 0.62);
+  color: var(--muted-foreground, rgba(82, 88, 99, 0.88));
 }
 .agy-turn-summary-bar .agy-turn-item {
   display: inline-flex;
@@ -346,29 +344,26 @@ export function buildHudCss() {
   white-space: nowrap;
 }
 .agy-turn-summary-bar .agy-turn-model {
-  color: rgba(232, 234, 237, 0.9);
+  color: var(--foreground, rgba(232, 234, 237, 0.92));
   font-weight: 500;
 }
 .agy-turn-summary-bar[data-agy-theme="light"] .agy-turn-model {
-  color: rgba(24, 25, 27, 0.9);
+  color: var(--foreground, rgba(24, 25, 27, 0.9));
 }
 .agy-turn-summary-bar .agy-turn-effort {
-  padding: 0 5px;
+  padding: 0 6px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
-  color: rgba(232, 234, 237, 0.8);
-  font-size: 10.5px;
-  line-height: 1.5;
+  color: var(--muted-foreground, rgba(200, 203, 210, 0.9));
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 .agy-turn-summary-bar[data-agy-theme="light"] .agy-turn-effort {
   background: rgba(0, 0, 0, 0.06);
-  color: rgba(24, 25, 27, 0.78);
+  color: var(--muted-foreground, rgba(64, 69, 79, 0.9));
 }
 .agy-turn-summary-bar .agy-turn-val {
-  color: rgba(232, 234, 237, 0.85);
-}
-.agy-turn-summary-bar[data-agy-theme="light"] .agy-turn-val {
-  color: rgba(24, 25, 27, 0.85);
+  color: inherit;
 }
 
 /* Optional compact layout rules adapted from WhiteBr1ck/agy-powertools (MIT License) */
