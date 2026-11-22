@@ -7,8 +7,8 @@ export const DEFAULT_CDP_PORT = 9229;
 export const DEFAULT_UPDATE_REPO_SLUG = 'Wujuhu/antigravity-hud';
 
 export const PILL_ITEM_CATALOG = [
-  { id: 'context', label: '上下文', defaultEnabled: true },
-  { id: 'speed', label: '速率', defaultEnabled: true },
+  { id: 'context', label: 'Context', defaultEnabled: true },
+  { id: 'speed', label: 'TPS', defaultEnabled: true },
   { id: 'quota', label: '5h 额度', defaultEnabled: true },
   { id: 'weeklyQuota', label: '周额度', defaultEnabled: false },
   { id: 'cache', label: '缓存命中', defaultEnabled: false },
@@ -23,14 +23,14 @@ export const POPOVER_SECTION_CATALOG = [
 ];
 
 export const COMPACT_PRESETS = {
-  off: { lineHeight: 1.6, blockGap: 14, listGap: 6 },
+  relaxed: { lineHeight: 1.7, blockGap: 22, listGap: 8 },
+  off: { lineHeight: 1.55, blockGap: 14, listGap: 6 },
   compact: { lineHeight: 1.4, blockGap: 8, listGap: 2 },
-  ultra: { lineHeight: 1.3, blockGap: 5, listGap: 1 },
 };
 
 const VALID_PILL_IDS = new Set(PILL_ITEM_CATALOG.map((item) => item.id));
 const VALID_SECTION_IDS = new Set(POPOVER_SECTION_CATALOG.map((item) => item.id));
-const VALID_COMPACT_MODES = new Set(['off', 'compact', 'ultra', 'custom']);
+const VALID_COMPACT_MODES = new Set(['relaxed', 'off', 'compact', 'custom']);
 const LEGACY_SECTION_MAP = {
   contextOverview: 'context',
   contextBreakdown: 'context',
@@ -125,8 +125,9 @@ export function normalizeConfig(raw = {}) {
     }
   }
 
-  const compactMode = VALID_COMPACT_MODES.has(src.compactMode)
-    ? src.compactMode
+  const rawMode = src.compactMode === 'ultra' ? 'compact' : src.compactMode;
+  const compactMode = VALID_COMPACT_MODES.has(rawMode)
+    ? rawMode
     : defaults.compactMode;
 
   return {
@@ -137,9 +138,9 @@ export function normalizeConfig(raw = {}) {
     contextDisplayFormat,
     windowCapMode,
     compactMode,
-    compactLineHeight: clampFloat(src.compactLineHeight, 1.2, 1.7, defaults.compactLineHeight, 2),
-    compactBlockGap: clampInt(src.compactBlockGap, 2, 18, defaults.compactBlockGap),
-    compactListGap: clampInt(src.compactListGap, 0, 10, defaults.compactListGap),
+    compactLineHeight: clampFloat(src.compactLineHeight, 1.25, 1.9, defaults.compactLineHeight, 2),
+    compactBlockGap: clampInt(src.compactBlockGap, 4, 28, defaults.compactBlockGap),
+    compactListGap: clampInt(src.compactListGap, 0, 14, defaults.compactListGap),
     showTurnSummary: typeof src.showTurnSummary === 'boolean' ? src.showTurnSummary : defaults.showTurnSummary,
     updateRepoSlug: typeof src.updateRepoSlug === 'string' ? src.updateRepoSlug.trim().slice(0, 120) : defaults.updateRepoSlug,
     autoCheckUpdate: typeof src.autoCheckUpdate === 'boolean' ? src.autoCheckUpdate : defaults.autoCheckUpdate,

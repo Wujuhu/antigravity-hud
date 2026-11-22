@@ -86,11 +86,44 @@ const demoSnapshot = assembleHudSnapshot({
     },
   },
   speedMetrics: {
+    source: 'sqlite',
     latestTokPerSec: 227.4,
     avgTokPerSec: 164.0,
     lastDurationSec: 6.2,
     lastOutputTokens: 1420,
-    upstreamModelId: 'gemini-4-neon-high',
+    upstreamModelId: 'Gemini 4 Neon (High)',
+    turns: [
+      {
+        turnIndex: 0,
+        startStepIdx: 0,
+        endStepIdx: 15,
+        minGenIdx: 0,
+        maxGenIdx: 5,
+        stepCount: 6,
+        modelLabel: 'Gemini 4 Neon',
+        effort: 'High',
+        totalTokens: 1420000,
+        cacheHitPct: 96.4,
+        totalDurSec: 42.8,
+        tps: 168,
+        totalCostUsd: 0.34,
+      },
+      {
+        turnIndex: 1,
+        startStepIdx: 16,
+        endStepIdx: -1,
+        minGenIdx: 6,
+        maxGenIdx: 12,
+        stepCount: 7,
+        modelLabel: 'Claude Sonnet 4.6',
+        effort: 'Medium',
+        totalTokens: 865000,
+        cacheHitPct: 92.1,
+        totalDurSec: 74.5,
+        tps: 112,
+        totalCostUsd: 0.48,
+      },
+    ],
   },
   quotaSummary: {
     ok: true,
@@ -255,6 +288,85 @@ function buildComposerDemoHtml(theme = 'dark') {
 </html>`;
 }
 
+function buildTurnSummaryDemoHtml() {
+  const hudExpr = buildHudInjectExpression(demoSnapshot, demoConfig);
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px 22px;
+      background: #111215;
+      color: #e6e8ec;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", Roboto, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .demo-block {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      background: #16181d;
+      padding: 14px 16px 12px;
+    }
+    .demo-block.narrow {
+      width: 360px;
+    }
+    .demo-tag {
+      font-size: 11px;
+      color: #7f8590;
+      margin-bottom: 8px;
+      letter-spacing: 0.01em;
+    }
+    .demo-prose {
+      color: #dcdfe5;
+      margin: 0 0 10px;
+      font-size: 12.5px;
+    }
+    .mock-tb {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #7f8590;
+      font-size: 11.5px;
+      padding-top: 2px;
+    }
+    .mock-tb span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-block">
+    <div class="demo-tag">宽屏效果（默认单行完整展示）</div>
+    <p class="demo-prose">已完成 SQLite 纳秒级纯流式 TPS 引擎接入与每轮汇总计算，所有 25 项单元测试均已通过。</p>
+    <div class="mock-tb" data-testid="cascade-system-message-toolbar">
+      <span>👍</span><span>👎</span><span>⧉ 复制</span><span>· just now</span>
+    </div>
+  </div>
+
+  <div class="demo-block narrow">
+    <div class="demo-tag">窄屏效果（360px 侧边栏打开时自动折行，不挤压按钮）</div>
+    <p class="demo-prose">已将排版模式调整为「舒适 / 原版 / 紧凑」三档，并同步更新桌面 CDP 启动器。</p>
+    <div class="mock-tb" data-testid="cascade-system-message-toolbar">
+      <span>👍</span><span>👎</span><span>⧉ 复制</span><span>· 2m ago</span>
+    </div>
+  </div>
+
+  <script>
+    ${hudExpr}
+  </script>
+</body>
+</html>`;
+}
+
 const demoPanelState = {
   platform: 'win32',
   currentVersion: '1.0.0',
@@ -302,6 +414,11 @@ const server = http.createServer((req, res) => {
   if (u.pathname === '/hud-light') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(buildComposerDemoHtml('light'));
+    return;
+  }
+  if (u.pathname === '/turn-summary') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(buildTurnSummaryDemoHtml());
     return;
   }
   if (u.pathname === '/panel') {
@@ -368,6 +485,7 @@ try {
   await snap('/hud-dark', 'hud-hover-dark.png', 860, 410);
   await snap('/hud-light', 'hud-hover-light.png', 860, 410);
   await snap('/panel', 'sidecar-panel.png', 520, 460);
+  await snap('/turn-summary', 'turn-summary-preview.png', 700, 390);
 } finally {
   server.close();
 }

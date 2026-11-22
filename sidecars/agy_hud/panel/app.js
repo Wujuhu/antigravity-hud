@@ -5,9 +5,9 @@
   const $ = (id) => document.getElementById(id);
 
   const COMPACT_PRESETS = {
-    off: { lineHeight: 1.6, blockGap: 14, listGap: 6, label: '原版' },
+    relaxed: { lineHeight: 1.7, blockGap: 22, listGap: 8, label: '舒适' },
+    off: { lineHeight: 1.55, blockGap: 14, listGap: 6, label: '原版' },
     compact: { lineHeight: 1.4, blockGap: 8, listGap: 2, label: '紧凑' },
-    ultra: { lineHeight: 1.3, blockGap: 5, listGap: 1, label: '极致' },
   };
 
   const GRIP_SVG =

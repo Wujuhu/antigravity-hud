@@ -902,9 +902,9 @@ export function buildHudInjectExpression(snapshot, config) {
         root.style.removeProperty('--agy-hud-list-gap');
         return;
       }
-      var lh = mode === 'ultra' ? 1.3 : mode === 'compact' ? 1.4 : Number(cfg.compactLineHeight || 1.4);
-      var bg = mode === 'ultra' ? 5 : mode === 'compact' ? 8 : Number(cfg.compactBlockGap ?? 8);
-      var lg = mode === 'ultra' ? 1 : mode === 'compact' ? 2 : Number(cfg.compactListGap ?? 2);
+      var lh = mode === 'relaxed' ? 1.7 : mode === 'compact' ? 1.4 : Number(cfg.compactLineHeight || 1.4);
+      var bg = mode === 'relaxed' ? 22 : mode === 'compact' ? 8 : Number(cfg.compactBlockGap ?? 8);
+      var lg = mode === 'relaxed' ? 8 : mode === 'compact' ? 2 : Number(cfg.compactListGap ?? 2);
       root.setAttribute('data-agy-hud-compact', '1');
       root.style.setProperty('--agy-hud-lh', String(lh));
       root.style.setProperty('--agy-hud-block-gap', String(bg) + 'px');
