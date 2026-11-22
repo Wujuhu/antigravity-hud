@@ -45,28 +45,26 @@
 
 ## 安装
 
-> 环境要求：Node.js `>= 22.5.0`（零外部依赖，无需 `npm install`）。
+> 环境要求：仅需 Node.js `>= 22.5.0`（**无需 Git，无需 `npm install`**）。安装后插件运行在 Antigravity 官方插件目录中，下载的安装包解压运行后即可直接删除。
 
 ### 方式一：AI Agent 自动安装（推荐）
 
-将下方指令发送给你的 AI Agent 即可：
+将下方指令发送给你的 AI Agent，它会自动下载安装包、完成部署并清理临时文件：
 
 ```text
 请按 https://github.com/Wujuhu/antigravity-hud/blob/main/docs/AGENT_INSTALL.md 安装 AGY HUD。
 ```
 
-### 方式二：手动安装
+### 方式二：手动下载 ZIP 安装（无需 Git）
 
-- **Windows**：下载 [Latest Release ZIP](https://github.com/Wujuhu/antigravity-hud/releases/latest) 解压后双击 `install.cmd`，或在 PowerShell 中运行：
-  ```powershell
-  git clone https://github.com/Wujuhu/antigravity-hud.git && cd antigravity-hud && node scripts/install.mjs
-  ```
-- **macOS / Linux**：
-  ```bash
-  git clone https://github.com/Wujuhu/antigravity-hud.git && cd antigravity-hud && chmod +x install.sh && ./install.sh
-  ```
-
-安装脚本会自动部署插件至 `~/.gemini/config/plugins/agy-hud`，并生成当前系统的 CDP 启动器（Windows 为桌面 `Antigravity (HUD).lnk`，macOS 为 `~/Applications/Antigravity (HUD).app`）。
+1. 前往 [Releases 页面](https://github.com/Wujuhu/antigravity-hud/releases/latest) 下载最新的 `agy-hud-v*.zip` 并解压：
+   - **Windows**：双击解压目录内的 `install.cmd`（或在终端运行 `node scripts/install.mjs`）。
+   - **macOS / Linux**：在终端进入解压目录并运行：
+     ```bash
+     chmod +x install.sh && ./install.sh
+     ```
+2. 安装脚本会自动把插件复制到 `~/.gemini/config/plugins/agy-hud`，并生成当前系统的启动器（Windows 为桌面 `Antigravity (HUD).lnk`，macOS 为 `~/Applications/Antigravity (HUD).app`）。
+3. **安装完成后即可直接删除刚才下载的 ZIP 和解压文件夹**，不影响运行与后续自动更新。
 
 ### 启用生效
 
@@ -81,16 +79,14 @@
 
 ## 卸载
 
-- **AI Agent 卸载**：
+- **AI Agent 卸载（推荐，无需保留安装包）**：
   ```text
   请按 https://github.com/Wujuhu/antigravity-hud/blob/main/docs/AGENT_UNINSTALL.md 卸载 AGY HUD。
   ```
 - **手动卸载**：
-  - Windows 双击 `uninstall.cmd`；macOS / Linux 运行 `./uninstall.sh`（默认保留配置）。
-  - 如需连同配置与启动器一并清除：
-    ```bash
-    node scripts/uninstall.mjs --purge-data
-    ```
+  - 删除插件目录 `~/.gemini/config/plugins/agy-hud` 即可停用并保留配置。
+  - 如需彻底清除：一并删除 `~/.gemini/antigravity/plugin_data/agy-hud` 与生成的启动器（Windows 桌面 `Antigravity (HUD).lnk` / macOS `~/Applications/Antigravity (HUD).app`）。
+  - 若本地仍保留安装包目录，也可直接运行 `uninstall.cmd` / `./uninstall.sh`（彻底清理加 `--purge-data`）。
 
 ---
 
