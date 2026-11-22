@@ -822,8 +822,8 @@ export function buildHudInjectExpression(snapshot, config) {
           return r.width > 0 && r.height > 0;
         }
 
-        function findVisibleAgyHudTab() {
-          var nodes = document.querySelectorAll('button, [role="tab"], [role="menuitem"]');
+        function findVisibleAgyHudItem() {
+          var nodes = document.querySelectorAll('[data-testid="plugins-submenu-item"], button, [role="tab"], [role="menuitem"]');
           for (var i = 0; i < nodes.length; i++) {
             var n = nodes[i];
             if (popEl.contains(n) || (pillEl && pillEl.contains(n))) continue;
@@ -837,19 +837,32 @@ export function buildHudInjectExpression(snapshot, config) {
           return null;
         }
 
-        function trySelectOrAddAgyHudTab() {
-          var tab = findVisibleAgyHudTab();
-          if (tab) {
-            tab.click();
+        function clickAgyHudFromPluginsCard() {
+          var direct = findVisibleAgyHudItem();
+          if (direct) {
+            direct.click();
             return true;
           }
+          var extCard = document.querySelector('[data-testid="new-tab-card-extensions"]');
+          if (extCard && isVisible(extCard)) {
+            extCard.click();
+            setTimeout(function() {
+              var item = findVisibleAgyHudItem();
+              if (item) item.click();
+            }, 150);
+            return true;
+          }
+          return false;
+        }
+
+        function trySelectOrAddAgyHudTab() {
+          if (clickAgyHudFromPluginsCard()) return true;
           var plusBtn = document.querySelector('[data-testid="side-panel-new-tab-button"]');
           if (!plusBtn || !isVisible(plusBtn)) return false;
           plusBtn.click();
           setTimeout(function() {
-            var item = findVisibleAgyHudTab();
-            if (item) item.click();
-          }, 180);
+            clickAgyHudFromPluginsCard();
+          }, 160);
           return true;
         }
 
