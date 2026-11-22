@@ -144,7 +144,40 @@ test('quota anchors simultaneously handle natural resets, official manual resets
   assert.equal(step2Active.anchors.gemini.anchorFraction, 1.0);
   assert.equal(step2Active.anchors.gemini.resetTimeMs, activatedReset);
 
-  // 3. Partial consumption (0.98 -> 0.20), then official partial top-up (0.20 -> 0.70)
+  // 2d. Minor upward bounce (e.g. +2% when 5h quota resets while weekly did NOT reset)
+  // must NOT wipe cycleStartMs or anchorFraction!
+  const step2Bounce = updateAnchorsFromQuotaGroups(
+    step2Active.anchors,
+    [{ key: 'gemini', weekly: { remainingFraction: 0.99, resetTimeMs: activatedReset } }],
+    activateAt + 5 * 3600_000,
+  );
+  assert.equal(step2Bounce.anchors.gemini.cycleStartMs, activateAt);
+  assert.equal(step2Bounce.anchors.gemini.anchorFraction, 1.0);
+  assert.equal(step2Bounce.anchors.gemini.reason, 'cycle_activated');
+
+  // 2e. Legacy v1 false partial_topup anchor auto-heals back to natural_window
+  const legacyFalseTopUp = {
+    gemini: {
+      cycleStartMs: activateAt + 4 * 3600_000,
+      resetTimeMs: activatedReset,
+      anchorFraction: 0.556,
+      lastFraction: 0.547,
+      lastObservedAtMs: activateAt + 5 * 3600_000,
+      idleFull: false,
+      reason: 'partial_topup',
+    },
+  };
+  const healed = updateAnchorsFromQuotaGroups(
+    legacyFalseTopUp,
+    [{ key: 'gemini', weekly: { remainingFraction: 0.545, resetTimeMs: activatedReset } }],
+    activateAt + 6 * 3600_000,
+  );
+  assert.equal(healed.anchors.gemini.reason, 'natural_window');
+  assert.equal(healed.anchors.gemini.cycleStartMs, activateAt);
+  assert.equal(healed.anchors.gemini.anchorFraction, 1.0);
+  assert.equal(healed.anchors.gemini.v, 2);
+
+  // 3. Partial consumption (0.98 -> 0.20), then official major partial top-up (0.20 -> 0.70, +50% >= 20%)
   const now3 = Date.parse('2026-11-25T12:00:00.000Z');
   const step3a = updateAnchorsFromQuotaGroups(
     step2Active.anchors,

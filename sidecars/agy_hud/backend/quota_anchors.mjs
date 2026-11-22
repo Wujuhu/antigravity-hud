@@ -20,9 +20,13 @@ import path from 'node:path';
 import { atomicWriteJson } from './config.mjs';
 
 export const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const ANCHOR_SCHEMA_VERSION = 2;
 const FULL_THRESHOLD = 0.9999;
 const NATURAL_RESET_SHIFT_MS = 60 * 60 * 1000; // > 1 hour jump in resetTime
-const MANUAL_RESET_RISE_THRESHOLD = 0.005; // > 0.5% upward jump in remainingFraction
+// Only treat a large (>= 20%) upward jump without resetTime shift as an official manual top-up;
+// smaller bounces (e.g. 0.5%-10% during 5h bucket resets or backend pre-charge reconciliation)
+// must NOT wipe the current weekly cycle baseline.
+const MANUAL_RESET_RISE_THRESHOLD = 0.20;
 const PERSIST_DROP_DELTA = 0.002; // Persist monotonic progress only when moved >= 0.2%
 
 function toFiniteFraction(bucket) {
@@ -82,6 +86,7 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
     if (!prev) {
       if (isFullNow) {
         next[key] = {
+          v: ANCHOR_SCHEMA_VERSION,
           cycleStartMs: nowMs,
           resetTimeMs: null, // Countdown does not start until first consumption
           anchorFraction: 1.0,
@@ -96,6 +101,7 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
             ? resetTimeMs - SEVEN_DAYS_MS
             : null;
         next[key] = {
+          v: ANCHOR_SCHEMA_VERSION,
           cycleStartMs: naturalStart ?? nowMs,
           resetTimeMs,
           anchorFraction: naturalStart !== null ? 1.0 : frac,
@@ -105,6 +111,32 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
           reason: naturalStart !== null ? 'natural_window' : 'first_seen',
         };
       }
+      changed = true;
+      shouldPersist = true;
+      continue;
+    }
+
+    // Migration self-heal: recover anchors that were falsely truncated to `partial_topup`
+    // by the legacy 0.5% rise threshold (e.g. minor rebound when 5h quota resets) while
+    // the actual weekly window (`resetTimeMs - 7d`) never reset.
+    if (
+      !isFullNow &&
+      prev.reason === 'partial_topup' &&
+      Number(prev.v || 1) < ANCHOR_SCHEMA_VERSION &&
+      resetTimeMs !== null &&
+      resetTimeMs - SEVEN_DAYS_MS <= nowMs &&
+      (prev.resetTimeMs === null || Math.abs(resetTimeMs - prev.resetTimeMs) <= NATURAL_RESET_SHIFT_MS)
+    ) {
+      next[key] = {
+        v: ANCHOR_SCHEMA_VERSION,
+        cycleStartMs: resetTimeMs - SEVEN_DAYS_MS,
+        resetTimeMs,
+        anchorFraction: 1.0,
+        lastFraction: frac,
+        lastObservedAtMs: nowMs,
+        idleFull: false,
+        reason: 'natural_window',
+      };
       changed = true;
       shouldPersist = true;
       continue;
@@ -124,6 +156,7 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
         const oldResetReached =
           prev.resetTimeMs !== null && nowMs >= prev.resetTimeMs - 60_000;
         next[key] = {
+          v: ANCHOR_SCHEMA_VERSION,
           cycleStartMs: nowMs,
           resetTimeMs: null, // Wait until first consumption activates the new countdown
           anchorFraction: 1.0,
@@ -151,6 +184,7 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
           : Math.max(enteredFullAt, Number(prev.lastObservedAtMs || enteredFullAt));
 
       next[key] = {
+        v: ANCHOR_SCHEMA_VERSION,
         cycleStartMs,
         resetTimeMs,
         anchorFraction: 1.0,
@@ -184,6 +218,7 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
             ? inferredStart
             : Math.max(prev.resetTimeMs - 60_000, Math.min(nowMs, inferredStart));
         next[key] = {
+          v: ANCHOR_SCHEMA_VERSION,
           cycleStartMs,
           resetTimeMs,
           anchorFraction: 1.0,
@@ -199,6 +234,7 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
             ? inferredStart
             : nowMs;
         next[key] = {
+          v: ANCHOR_SCHEMA_VERSION,
           cycleStartMs,
           resetTimeMs,
           anchorFraction: frac >= 0.995 || inferredStart > prevObsMs ? 1.0 : frac,
@@ -213,10 +249,11 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
       continue;
     }
 
-    // Case 4: Active cycle — official partial top-up (fraction jumped upward without reaching full)
+    // Case 4: Active cycle — official major partial top-up (>= 20% upward jump without reaching full)
     const isPartialTopUp = frac > Number(prev.lastFraction ?? 1) + MANUAL_RESET_RISE_THRESHOLD;
     if (isPartialTopUp) {
       next[key] = {
+        v: ANCHOR_SCHEMA_VERSION,
         cycleStartMs: nowMs,
         resetTimeMs: resetTimeMs ?? prev.resetTimeMs,
         anchorFraction: frac,
@@ -230,10 +267,10 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
       continue;
     }
 
-    // Case 5: Normal monotonic consumption inside current active cycle
+    // Case 5: Normal consumption inside current active cycle (also tolerates small non-reset rebounds)
     const drop = Number(prev.lastFraction ?? frac) - frac;
     const updatedReset = resetTimeMs !== null ? resetTimeMs : prev.resetTimeMs;
-    if (drop >= PERSIST_DROP_DELTA || updatedReset !== prev.resetTimeMs) {
+    if (drop >= PERSIST_DROP_DELTA || updatedReset !== prev.resetTimeMs || Number(prev.v || 1) < ANCHOR_SCHEMA_VERSION) {
       shouldPersist = true;
     }
     if (frac !== prev.lastFraction || updatedReset !== prev.resetTimeMs) {
@@ -241,6 +278,7 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
     }
     next[key] = {
       ...prev,
+      v: ANCHOR_SCHEMA_VERSION,
       resetTimeMs: updatedReset,
       lastFraction: frac,
       lastObservedAtMs: nowMs,

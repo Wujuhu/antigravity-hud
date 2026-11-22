@@ -436,6 +436,11 @@ export function readConversationSqliteMetrics(appData, convId) {
     const latestRate = computePrimaryTps(last.outTok, last.stream, last.totDur);
     const avgRate = computePrimaryTps(sumOut, sumStream, sumTotDur);
     const turns = buildPerTurnSummaries(validItems, userStepIdxs);
+    const lastTurn = turns.length > 0 ? turns[turns.length - 1] : null;
+    const sessionTotalTokens = turns.reduce((sum, t) => sum + Number(t.totalTokens || 0), 0);
+    const sessionTotalCostUsd = Math.round(
+      turns.reduce((sum, t) => sum + Number(t.totalCostUsd || 0), 0) * 10000,
+    ) / 10000;
 
     const result = {
       source: 'sqlite',
@@ -447,6 +452,10 @@ export function readConversationSqliteMetrics(appData, convId) {
       lastStreamSec: last.stream > 0 ? Math.round(last.stream * 10) / 10 : null,
       lastTtftSec: last.ttft > 0 ? Math.round(last.ttft * 10) / 10 : null,
       lastOutputTokens: last.outTok,
+      lastTurnTokens: lastTurn ? lastTurn.totalTokens : last.ctx + last.outTok,
+      lastTurnCostUsd: lastTurn ? lastTurn.totalCostUsd : 0,
+      sessionTotalTokens,
+      sessionTotalCostUsd,
       upstreamModelId: last.modelName || latestModelName || '',
       sampleCount: validItems.length,
       turns,

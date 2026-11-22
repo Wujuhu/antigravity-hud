@@ -8,6 +8,7 @@ import { computeSpeedMetricsFromFile } from './speed_tracker.mjs';
 import { readConversationSqliteMetrics } from './sqlite_metrics.mjs';
 import {
   buildWeeklyQuotaEstimates,
+  estimateTurnCostUsd,
   scanWeeklyLocalUsage,
 } from './weekly_usage.mjs';
 
@@ -238,6 +239,45 @@ export function assembleHudSnapshot({
   const cumulativeTotalTokens =
     Number(cache.cumulativeInputTokens || 0) + Number(cache.cumulativeOutputTokens || 0);
 
+  // Compute per-turn spend and total session spend (prefer SQLite exact per-turn sums, else fallback)
+  const fallbackLastPrompt = Number(cache.lastPromptTokens || 0);
+  const fallbackLastCached = Number(cache.cachedTokens || 0);
+  const fallbackLastOut = Number(cache.lastOutputTokens || speedMetrics?.lastOutputTokens || 0);
+  const fallbackLastUncached = Math.max(0, fallbackLastPrompt - fallbackLastCached);
+  const fallbackLastTokens = fallbackLastPrompt + fallbackLastOut;
+  const fallbackLastCost = estimateTurnCostUsd(
+    modelId,
+    fallbackLastUncached,
+    fallbackLastCached,
+    fallbackLastOut,
+  ).costUsd;
+
+  const fallbackCumIn = Number(cache.cumulativeInputTokens || 0);
+  const fallbackCumCached = Number(cache.cumulativeCachedTokens || 0);
+  const fallbackCumOut = Number(cache.cumulativeOutputTokens || 0);
+  const fallbackCumUncached = Math.max(0, fallbackCumIn - fallbackCumCached);
+  const fallbackSessionCost = estimateTurnCostUsd(
+    modelId,
+    fallbackCumUncached,
+    fallbackCumCached,
+    fallbackCumOut,
+  ).costUsd;
+
+  const lastTurnTokens =
+    speedMetrics?.lastTurnTokens != null ? Number(speedMetrics.lastTurnTokens) : fallbackLastTokens;
+  const lastTurnCostUsd =
+    speedMetrics?.lastTurnCostUsd != null
+      ? Number(speedMetrics.lastTurnCostUsd)
+      : Math.round(fallbackLastCost * 10000) / 10000;
+  const sessionTotalTokens =
+    speedMetrics?.sessionTotalTokens != null && Number(speedMetrics.sessionTotalTokens) > 0
+      ? Number(speedMetrics.sessionTotalTokens)
+      : cumulativeTotalTokens;
+  const sessionTotalCostUsd =
+    speedMetrics?.sessionTotalCostUsd != null && Number(speedMetrics.sessionTotalTokens || 0) > 0
+      ? Number(speedMetrics.sessionTotalCostUsd)
+      : Math.round(fallbackSessionCost * 10000) / 10000;
+
   const groups = Array.isArray(quotaSummary?.groups) ? quotaSummary.groups : [];
   const activeGroupKey = matchModelToQuotaGroupKey(modelId);
   const activeGroup =
@@ -302,6 +342,12 @@ export function assembleHudSnapshot({
       lastOutputTokens: speedMetrics?.lastOutputTokens ?? Number(cache.lastOutputTokens || 0),
     },
     turns: Array.isArray(speedMetrics?.turns) ? speedMetrics.turns : [],
+    spend: {
+      lastTurnTokens,
+      lastTurnCostUsd,
+      sessionTotalTokens,
+      sessionTotalCostUsd,
+    },
     cache: {
       lastHitPct: Number.isFinite(Number(cache.cacheHitRatio)) ? Number(cache.cacheHitRatio) : null,
       lastCachedTokens: Number(cache.cachedTokens || 0),

@@ -17,10 +17,10 @@
       <div id="weeklyEstimateBody" class="weekly-body"></div>
     </section>
 
-    <!-- 2. HUD 数据与顺序（默认收起，点击展开） -->
+    <!-- 2. HUD（默认收起，点击展开） -->
     <details class="panel-group fold" id="hudConfigDetails">
       <summary class="fold-head">
-        <h2>HUD 数据与顺序</h2>
+        <h2>HUD</h2>
         <div class="fold-right">
           <span class="meta fold-summary-text" id="hudSummaryText">Context · TPS · 5h 额度</span>
           <svg class="fold-chevron" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -64,10 +64,10 @@
       </div>
     </details>
 
-    <!-- 3. 界面排版紧凑度与每轮总信息栏（默认收起） -->
+    <!-- 3. 界面（默认收起） -->
     <details class="panel-group fold" id="layoutConfigDetails">
       <summary class="fold-head">
-        <h2>界面排版</h2>
+        <h2>界面</h2>
         <div class="fold-right">
           <span class="meta fold-summary-text" id="layoutSummaryText">原版</span>
           <svg class="fold-chevron" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -156,9 +156,12 @@
     <!-- 5. CDP 状态（正常时仅单行状态；异常时才展示提醒与生成启动器） -->
     <section class="panel-group">
       <div class="group-head">
-        <div class="title-inline">
-          <span class="status-dot" id="statusDot"></span>
-          <h2>CDP 状态</h2>
+        <div class="cdp-head-left">
+          <div class="title-inline">
+            <span class="status-dot" id="statusDot"></span>
+            <h2>CDP 状态</h2>
+          </div>
+          <div class="cdp-subnote">该状态决定 HUD 的正常显示</div>
         </div>
         <span class="status-badge" id="cdpStateText">检测中</span>
       </div>

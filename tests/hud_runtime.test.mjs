@@ -53,7 +53,11 @@ test('HUD inject and remove expressions parse cleanly as valid JavaScript', () =
   assert.match(injectExpr, new RegExp(HUD_POPOVER_ID));
   assert.match(injectExpr, /"compactionCount":2/);
   assert.match(injectExpr, /压缩 /);
-  assert.match(injectExpr, /sidecar:\/\/agy-hud\/agy_hud\//);
+  assert.match(injectExpr, /本轮花费/);
+  assert.match(injectExpr, /总计花费/);
+  assert.doesNotMatch(injectExpr, />本轮输出</);
+  assert.doesNotMatch(injectExpr, /agy-turn-item">缓存 /);
+  assert.match(injectExpr, /data-agy-action="open-sidecar"/);
   // Ensure custom order is embedded in payload
   assert.ok(injectExpr.indexOf('"id":"quota"') < injectExpr.indexOf('"id":"context"'));
 });

@@ -182,6 +182,20 @@ body {
   min-width: 0;
 }
 
+.cdp-head-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cdp-subnote {
+  font-size: 11px;
+  color: var(--muted);
+  padding-left: 12px;
+  line-height: 1.35;
+}
+
 .ver-tag {
   font-size: 10.5px;
   color: var(--muted);

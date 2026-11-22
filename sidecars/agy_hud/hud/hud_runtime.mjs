@@ -128,6 +128,14 @@ export function buildHudCss() {
   transform: translateY(0);
   pointer-events: auto;
 }
+#${HUD_POPOVER_ID}::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 22px;
+}
 #${HUD_POPOVER_ID}[data-agy-theme="light"] {
   --pop-bg: #ffffff;
   --pop-border: rgba(0, 0, 0, 0.1);
@@ -220,14 +228,17 @@ export function buildHudCss() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 6px;
   font-size: 11px;
 }
 #${HUD_POPOVER_ID} .agy-kv span {
   color: var(--pop-muted);
+  white-space: nowrap;
 }
 #${HUD_POPOVER_ID} .agy-kv strong {
   font-weight: 500;
   color: var(--pop-text);
+  white-space: nowrap;
 }
 #${HUD_POPOVER_ID} .agy-quota-list {
   display: flex;
@@ -296,6 +307,9 @@ export function buildHudCss() {
   width: 20px;
   height: 20px;
   margin-right: -3px;
+  padding: 0;
+  border: none;
+  background: transparent;
   border-radius: 5px;
   color: var(--pop-muted);
   text-decoration: none;
@@ -703,13 +717,15 @@ export function buildHudInjectExpression(snapshot, config) {
           }
           var compCount = Number(ctx.compactionCount || 0);
           var compHtml = compCount > 0 ? ' · 压缩 ' + esc(compCount) + '次' : '';
+          var hasAuxToggle = Boolean(document.querySelector('[data-testid="toggle-aux-sidebar"]'));
+          var sidecarTitle = hasAuxToggle ? '打开右侧 AGY HUD 侧边栏' : '进入任意对话后可打开右侧 AGY HUD 侧边栏';
           var sidecarBtn =
-            '<a class="agy-sidecar-icon" href="sidecar://agy-hud/agy_hud/" data-agy-action="open-sidecar" title="打开右侧 AGY HUD 侧边栏" aria-label="打开右侧 AGY HUD 侧边栏">' +
+            '<button type="button" class="agy-sidecar-icon" data-agy-action="open-sidecar" title="' + sidecarTitle + '" aria-label="' + sidecarTitle + '"' + (hasAuxToggle ? '' : ' style="opacity:0.45"') + '>' +
               '<svg viewBox="0 0 16 16" width="12.5" height="12.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
                 '<rect x="2" y="2.5" width="12" height="11" rx="2"/>' +
                 '<line x1="10" y1="2.5" x2="10" y2="13.5"/>' +
               '</svg>' +
-            '</a>';
+            '</button>';
           blocks.push(
             '<div class="agy-sec">' +
               '<div class="agy-row">' +
@@ -724,10 +740,35 @@ export function buildHudInjectExpression(snapshot, config) {
             '</div>'
           );
         } else if (sec.id === 'speedAndCache') {
+          var sp = snap.spend || {};
+          var turnsArr = Array.isArray(snap.turns) ? snap.turns : [];
+          var lastTurnFallback = turnsArr.length > 0 ? turnsArr[turnsArr.length - 1] : null;
           var curSpeed = spd.latestTokPerSec != null ? spd.latestTokPerSec + ' tok/s' : '--';
           var avgSpeed = spd.avgTokPerSec != null ? spd.avgTokPerSec + ' tok/s' : '--';
           var lastHit = cac.lastHitPct != null ? cac.lastHitPct.toFixed(1) + '%' : '--';
           var totalHit = cac.sessionHitPct != null ? cac.sessionHitPct.toFixed(1) + '%' : '--';
+          var turnTok = Number(
+            sp.lastTurnTokens != null
+              ? sp.lastTurnTokens
+              : lastTurnFallback
+                ? lastTurnFallback.totalTokens
+                : 0,
+          );
+          var turnUsd = Number(
+            sp.lastTurnCostUsd != null
+              ? sp.lastTurnCostUsd
+              : lastTurnFallback
+                ? lastTurnFallback.totalCostUsd
+                : 0,
+          );
+          var totalTok = Number(
+            sp.sessionTotalTokens != null && Number(sp.sessionTotalTokens) > 0
+              ? sp.sessionTotalTokens
+              : cac.cumulativeTotalTokens || 0,
+          );
+          var totalUsd = Number(sp.sessionTotalCostUsd != null ? sp.sessionTotalCostUsd : 0);
+          var turnSpendText = turnTok > 0 ? fmtTok(turnTok) + ' · ' + fmtUsd(turnUsd) : '0 · $0.00';
+          var totalSpendText = totalTok > 0 ? fmtTok(totalTok) + ' · ' + fmtUsd(totalUsd) : '0 · $0.00';
           blocks.push(
             '<div class="agy-sec">' +
               '<div class="agy-metrics-grid">' +
@@ -735,8 +776,8 @@ export function buildHudInjectExpression(snapshot, config) {
                 '<div class="agy-kv"><span>本轮缓存</span><strong>' + esc(lastHit) + '</strong></div>' +
                 '<div class="agy-kv"><span>会话均值</span><strong>' + esc(avgSpeed) + '</strong></div>' +
                 '<div class="agy-kv"><span>总缓存</span><strong>' + esc(totalHit) + '</strong></div>' +
-                '<div class="agy-kv"><span>本轮输出</span><strong>' + esc(fmtTok(spd.lastOutputTokens)) + '</strong></div>' +
-                '<div class="agy-kv"><span>会话总计</span><strong>' + esc(fmtTok(cac.cumulativeTotalTokens)) + '</strong></div>' +
+                '<div class="agy-kv"><span>本轮花费</span><strong>' + esc(turnSpendText) + '</strong></div>' +
+                '<div class="agy-kv"><span>总计花费</span><strong>' + esc(totalSpendText) + '</strong></div>' +
               '</div>' +
             '</div>'
           );
@@ -808,19 +849,28 @@ export function buildHudInjectExpression(snapshot, config) {
     }
 
     function bindHoverEvents(pillEl, popEl) {
-      function handleOpenSidecarTrigger(ev) {
+      // Freeze popover DOM innerHTML updates while pointer is pressed inside popover so click is never dropped
+      popEl.onmousedown = function(ev) {
+        if (ev.target && ev.target.closest && ev.target.closest('[data-agy-action="open-sidecar"]')) {
+          window.__agyHudPopPointerDown = true;
+          ev.stopPropagation();
+        }
+      };
+      if (!window.__agyHudPopMouseUpBound) {
+        window.__agyHudPopMouseUpBound = true;
+        window.addEventListener('mouseup', function() {
+          window.__agyHudPopPointerDown = false;
+        }, true);
+      }
+
+      // Run open sequence strictly on click (+ setTimeout 0) so the user's own mouseup/click
+      // finishes BEFORE opening Radix/Base-UI dropdowns and cannot outside-click-dismiss them!
+      popEl.onclick = function(ev) {
+        window.__agyHudPopPointerDown = false;
         var link = ev.target && ev.target.closest ? ev.target.closest('[data-agy-action="open-sidecar"]') : null;
         if (!link) return;
-        if (ev.type === 'mousedown' && ev.button !== 0) return;
         ev.preventDefault();
         ev.stopPropagation();
-
-        // Deduplicate paired mousedown + click within 350ms
-        var nowTs = Date.now();
-        if (window.__agyHudLastOpenSidecarTs && nowTs - window.__agyHudLastOpenSidecarTs < 350) {
-          return;
-        }
-        window.__agyHudLastOpenSidecarTs = nowTs;
         popEl.classList.remove('is-visible');
 
         var opSeq = (window.__agyHudSidecarOpSeq = (window.__agyHudSidecarOpSeq || 0) + 1);
@@ -846,7 +896,7 @@ export function buildHudInjectExpression(snapshot, config) {
         }
 
         function waitUntil(probeFn, onReady, timeoutMs, intervalMs) {
-          var deadline = Date.now() + (timeoutMs || 1500);
+          var deadline = Date.now() + (timeoutMs || 1800);
           var step = intervalMs || 70;
           function tick() {
             if (!isCurrent()) return;
@@ -867,17 +917,26 @@ export function buildHudInjectExpression(snapshot, config) {
           tick();
         }
 
-        function findVisibleAgyHudItem() {
-          var nodes = document.querySelectorAll('[data-testid="plugins-submenu-item"], [role="tab"], [role="menuitem"], button');
-          for (var i = 0; i < nodes.length; i++) {
-            var n = nodes[i];
-            if (popEl.contains(n) || (pillEl && pillEl.contains(n))) continue;
+        // Strict search: existing AGY HUD tab in the right side-panel tab strip ONLY
+        function findExistingAgyHudTab() {
+          var tabBtns = document.querySelectorAll('.agy-aux-tab button, [data-side-panel-strip] button');
+          for (var i = 0; i < tabBtns.length; i++) {
+            var btn = tabBtns[i];
+            if (!isVisible(btn)) continue;
+            var titleEl = btn.querySelector ? btn.querySelector('.agy-aux-tab-title') : null;
+            var txt = ((titleEl ? titleEl.textContent : btn.textContent) || '').trim();
+            if (txt === 'AGY HUD') return btn;
+          }
+          return null;
+        }
+
+        // Strict search: AGY HUD entry inside the Plugins submenu ONLY
+        function findVisiblePluginMenuItem() {
+          var items = document.querySelectorAll('[data-testid="plugins-submenu-item"]');
+          for (var i = 0; i < items.length; i++) {
+            var n = items[i];
             if (!isVisible(n)) continue;
-            var txt = (n.textContent || '').trim();
-            var lbl = (n.getAttribute('aria-label') || n.getAttribute('title') || '').trim();
-            if (txt === 'AGY HUD' || lbl === 'AGY HUD') {
-              return n;
-            }
+            if ((n.textContent || '').trim() === 'AGY HUD') return n;
           }
           return null;
         }
@@ -898,9 +957,8 @@ export function buildHudInjectExpression(snapshot, config) {
           var startedAt = Date.now();
           waitUntil(
             function() {
-              var item = findVisibleAgyHudItem();
+              var item = findVisiblePluginMenuItem();
               if (item) return item;
-              // On first cold launch, the first click during drawer animation can be swallowed; retry once
               if (!retried && Date.now() - startedAt > 360) {
                 var cardAgain = findVisibleExtCard();
                 if (cardAgain) {
@@ -913,17 +971,18 @@ export function buildHudInjectExpression(snapshot, config) {
             function(item) {
               fireClick(item);
             },
-            1800,
+            2000,
             70,
           );
         }
 
         function selectOrAddAgyHudTab() {
-          // Wait for any side-panel entry point to finish mounting (handles cold-start lazy mount)
           waitUntil(
             function() {
-              var direct = findVisibleAgyHudItem();
-              if (direct) return { kind: 'direct', el: direct };
+              var tab = findExistingAgyHudTab();
+              if (tab) return { kind: 'tab', el: tab };
+              var menuItem = findVisiblePluginMenuItem();
+              if (menuItem) return { kind: 'menuItem', el: menuItem };
               var extCard = findVisibleExtCard();
               if (extCard) return { kind: 'ext', el: extCard };
               var plusBtn = findVisiblePlusBtn();
@@ -931,7 +990,7 @@ export function buildHudInjectExpression(snapshot, config) {
               return null;
             },
             function(found) {
-              if (found.kind === 'direct') {
+              if (found.kind === 'tab' || found.kind === 'menuItem') {
                 fireClick(found.el);
                 return;
               }
@@ -943,45 +1002,47 @@ export function buildHudInjectExpression(snapshot, config) {
                 fireClick(found.el);
                 waitUntil(
                   function() {
-                    var item = findVisibleAgyHudItem();
-                    if (item) return { kind: 'direct', el: item };
+                    var item = findVisiblePluginMenuItem();
+                    if (item) return { kind: 'menuItem', el: item };
                     var card = findVisibleExtCard();
                     if (card) return { kind: 'ext', el: card };
                     return null;
                   },
                   function(next) {
-                    if (next.kind === 'direct') fireClick(next.el);
+                    if (next.kind === 'menuItem') fireClick(next.el);
                     else openFromPluginsCard(next.el);
                   },
-                  1600,
+                  1800,
                   70,
                 );
               }
             },
-            1800,
+            2000,
             70,
           );
         }
 
-        var toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
-        var isExpanded = toggleBtn ? toggleBtn.getAttribute('aria-expanded') === 'true' : false;
-        var panelAlreadyMounted = Boolean(findVisibleAgyHudItem() || findVisibleExtCard() || findVisiblePlusBtn());
+        // Defer to next macrotask so current click event lifecycle completes cleanly
+        setTimeout(function() {
+          if (!isCurrent()) return;
+          var toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
+          if (!toggleBtn) return;
+          var isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+          var panelAlreadyMounted = Boolean(
+            findExistingAgyHudTab() || findVisibleExtCard() || findVisiblePlusBtn(),
+          );
 
-        if (!isExpanded && !panelAlreadyMounted && toggleBtn && isVisible(toggleBtn)) {
-          fireClick(toggleBtn);
-          // Give React one micro-frame to begin expanding, then poll until panel children mount
-          setTimeout(function() {
-            if (isCurrent()) selectOrAddAgyHudTab();
-          }, 80);
-          return;
-        }
+          if (!isExpanded && !panelAlreadyMounted && isVisible(toggleBtn)) {
+            fireClick(toggleBtn);
+            setTimeout(function() {
+              if (isCurrent()) selectOrAddAgyHudTab();
+            }, 80);
+            return;
+          }
 
-        selectOrAddAgyHudTab();
-      }
-
-      // Always replace both mousedown (immune to DOM re-render between down/up) and click (keyboard/a11y)
-      popEl.onmousedown = handleOpenSidecarTrigger;
-      popEl.onclick = handleOpenSidecarTrigger;
+          selectOrAddAgyHudTab();
+        }, 0);
+      };
 
       if (pillEl.__agyHudBound) return;
       pillEl.__agyHudBound = true;
@@ -1008,7 +1069,7 @@ export function buildHudInjectExpression(snapshot, config) {
         clearTimeout(hideTimer);
         hideTimer = setTimeout(function() {
           popEl.classList.remove('is-visible');
-        }, 220);
+        }, 380);
       }
 
       pillEl.addEventListener('mouseenter', openPop);
@@ -1175,7 +1236,7 @@ export function buildHudInjectExpression(snapshot, config) {
         parts.push('<span class="agy-turn-item">' + mHtml + '</span>');
       }
       if (t.cacheHitPct != null) {
-        parts.push('<span class="agy-turn-item">缓存 <span class="agy-turn-val">' + esc(Number(t.cacheHitPct).toFixed(1)) + '%</span></span>');
+        parts.push('<span class="agy-turn-item"><span class="agy-turn-val">' + esc(Number(t.cacheHitPct).toFixed(1)) + '%</span></span>');
       }
       if (t.totalDurSec > 0) {
         parts.push('<span class="agy-turn-item"><span class="agy-turn-val">' + esc(fmtSec(t.totalDurSec)) + '</span></span>');
@@ -1290,7 +1351,7 @@ export function buildHudInjectExpression(snapshot, config) {
         pillEl.innerHTML = nextPillHtml;
       }
       var nextPopHtml = renderPopoverHtml();
-      if (popEl.getAttribute('data-agy-pop-html') !== nextPopHtml) {
+      if (!window.__agyHudPopPointerDown && popEl.getAttribute('data-agy-pop-html') !== nextPopHtml) {
         popEl.setAttribute('data-agy-pop-html', nextPopHtml);
         popEl.innerHTML = nextPopHtml;
       }
