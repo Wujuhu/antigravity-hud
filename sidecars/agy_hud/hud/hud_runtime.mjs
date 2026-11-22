@@ -295,7 +295,7 @@ export function buildHudCss() {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 3px 10px;
+  gap: 3px 6px;
   width: 100%;
   max-width: 100%;
   margin: 6px 0 3px;
@@ -308,6 +308,13 @@ export function buildHudCss() {
   color: rgba(232, 234, 237, 0.62);
   box-sizing: border-box;
   user-select: text;
+}
+.agy-turn-summary-bar .agy-turn-sep {
+  color: rgba(255, 255, 255, 0.24);
+  user-select: none;
+}
+.agy-turn-summary-bar[data-agy-theme="light"] .agy-turn-sep {
+  color: rgba(0, 0, 0, 0.22);
 }
 .agy-turn-summary-bar[data-agy-theme="light"] {
   border-top-color: rgba(0, 0, 0, 0.07);
@@ -1025,7 +1032,7 @@ export function buildHudInjectExpression(snapshot, config) {
       if (t.totalCostUsd != null && t.totalTokens > 0) {
         parts.push('<span class="agy-turn-item"><span class="agy-turn-val">' + esc(fmtUsd(t.totalCostUsd)) + '</span></span>');
       }
-      return parts.join('');
+      return parts.join('<span class="agy-turn-sep">·</span>');
     }
 
     function renderTurnSummaries(theme) {

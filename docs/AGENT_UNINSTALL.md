@@ -8,7 +8,7 @@
 
 1. **确认清理范围（若用户未明确说明）**
    - **常规卸载（默认）**：仅移除插件目录 `~/.gemini/config/plugins/agy-hud`，保留个人自定义排序配置（方便日后重装）。
-   - **彻底卸载（`--purge-data`）**：同时删除 `~/.gemini/antigravity/plugin_data/agy-hud` 以及生成的 CDP 启动器（Windows 桌面 `Antigravity (CDP).lnk` 或 macOS `~/Applications/Antigravity (CDP).app`）。
+   - **彻底卸载（`--purge-data`）**：同时删除 `~/.gemini/antigravity/plugin_data/agy-hud` 以及生成的 CDP 启动器（Windows 桌面 `Antigravity (HUD).lnk` 或 macOS `~/Applications/Antigravity (HUD).app`）。
 
 2. **执行卸载**
    - 若本地存在 `antigravity-hud` 仓库目录，进入根目录执行：

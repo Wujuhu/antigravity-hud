@@ -383,7 +383,7 @@ const demoPanelState = {
   launcherInfo: {
     platform: 'win32',
     port: 9229,
-    lnkPath: 'C:\\Users\\demo\\Desktop\\Antigravity (CDP).lnk',
+    lnkPath: 'C:\\Users\\demo\\Desktop\\Antigravity (HUD).lnk',
   },
   updateStatus: {
     ok: true,

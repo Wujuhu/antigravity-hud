@@ -1,7 +1,7 @@
 /**
  * macOS lightweight wrapper .app bundle generator for AGY HUD.
  *
- * Creates `~/Applications/Antigravity (CDP).app` without modifying the signed
+ * Creates `~/Applications/Antigravity (HUD).app` without modifying the signed
  * `/Applications/Antigravity.app` bundle, preserving Apple code signing,
  * Keychain state, and auto-updates.
  */
@@ -29,7 +29,7 @@ export function findMacAntigravityApp(candidates = [
 }
 
 export function buildMacInfoPlist({
-  bundleName = 'Antigravity (CDP)',
+  bundleName = 'Antigravity (HUD)',
   bundleId = 'com.agyhud.antigravity-cdp-launcher',
   port = DEFAULT_CDP_PORT,
   hasIcon = false,
@@ -111,7 +111,7 @@ function findIcnsInApp(appPath) {
 
 export async function generateMacCdpLauncher({
   applicationsDir = path.join(os.homedir(), 'Applications'),
-  bundleName = 'Antigravity (CDP)',
+  bundleName = 'Antigravity (HUD)',
   port = DEFAULT_CDP_PORT,
   targetAppOverride = '',
 } = {}) {

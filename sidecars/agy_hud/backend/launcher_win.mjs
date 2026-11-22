@@ -121,9 +121,11 @@ export async function generateWindowsCdpLauncher({
   await fsp.mkdir(outDir, { recursive: true });
 
   const vbsPath = path.join(outDir, 'launch_antigravity_cdp.vbs');
-  const cmdPath = path.join(outDir, 'Antigravity_CDP.cmd');
-  const lnkPath = path.join(outDir, 'Antigravity (CDP).lnk');
-  const desktopLnkPath = path.join(desktopDir, 'Antigravity (CDP).lnk');
+  const cmdPath = path.join(outDir, 'Antigravity_HUD.cmd');
+  const lnkPath = path.join(outDir, 'Antigravity (HUD).lnk');
+  const desktopLnkPath = path.join(desktopDir, 'Antigravity (HUD).lnk');
+  const legacyLnkPath = path.join(outDir, 'Antigravity (CDP).lnk');
+  const legacyDesktopLnkPath = path.join(desktopDir, 'Antigravity (CDP).lnk');
 
   const vbsContent = buildWindowsVbsContent(detected.exePath, p);
   const vbsBuf = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(vbsContent, 'utf16le')]);
@@ -163,6 +165,12 @@ export async function generateWindowsCdpLauncher({
           description: desc,
         });
       }
+      if (desktopLnkCreated && fs.existsSync(legacyDesktopLnkPath)) {
+        await fsp.unlink(legacyDesktopLnkPath).catch(() => {});
+      }
+    }
+    if (lnkCreated && fs.existsSync(legacyLnkPath)) {
+      await fsp.unlink(legacyLnkPath).catch(() => {});
     }
   }
 

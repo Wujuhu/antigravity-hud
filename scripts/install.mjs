@@ -6,8 +6,8 @@
  * - Copies plugin files to ~/.gemini/config/plugins/agy-hud
  * - Preserves existing user settings in ~/.gemini/antigravity/plugin_data/agy-hud
  * - Generates the OS-appropriate CDP launcher:
- *     Windows: Desktop `Antigravity (CDP).lnk` (+ silent .vbs/.cmd)
- *     macOS:   `~/Applications/Antigravity (CDP).app` wrapper bundle
+ *     Windows: Desktop `Antigravity (HUD).lnk` (+ silent .vbs/.cmd)
+ *     macOS:   `~/Applications/Antigravity (HUD).app` wrapper bundle
  * - Never touches Antigravity app.asar or ~/.gemini/config/config.json
  */
 

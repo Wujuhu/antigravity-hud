@@ -256,10 +256,10 @@
 
   function buildCdpAlertMessage(platform, port) {
     if (platform === 'darwin') {
-      return '当前未处于 CDP 注入状态。请点击下方生成启动器，按 Cmd+Q 彻底退出 Antigravity 后，打开 ~/Applications/Antigravity (CDP).app 重新启动。';
+      return '当前未处于 CDP 注入状态。请点击下方生成启动器，按 Cmd+Q 彻底退出 Antigravity 后，打开 ~/Applications/Antigravity (HUD).app 重新启动。';
     }
     if (platform === 'win32') {
-      return '当前未处于 CDP 注入状态。请点击下方生成启动器，彻底退出 Antigravity（含右下角托盘图标）后，双击桌面 Antigravity (CDP).lnk 重新启动。';
+      return '当前未处于 CDP 注入状态。请点击下方生成启动器，彻底退出 Antigravity（含右下角托盘图标）后，双击桌面 Antigravity (HUD).lnk 重新启动。';
     }
     return `当前未处于 CDP 注入状态。请彻底退出 Antigravity 后，使用带 --remote-debugging-port=${port || 9229} 参数的命令重新启动。`;
   }

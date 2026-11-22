@@ -36,16 +36,20 @@ export async function uninstallPlugin({
   }
 
   if (process.platform === 'darwin') {
-    const macApp = path.join(applicationsDir, 'Antigravity (CDP).app');
-    if (purgeData && fs.existsSync(macApp)) {
-      await fsp.rm(macApp, { recursive: true, force: true });
-      log(`✓ 已移除 macOS 启动器: ${macApp}`);
+    for (const appName of ['Antigravity (HUD).app', 'Antigravity (CDP).app']) {
+      const macApp = path.join(applicationsDir, appName);
+      if (purgeData && fs.existsSync(macApp)) {
+        await fsp.rm(macApp, { recursive: true, force: true });
+        log(`✓ 已移除 macOS 启动器: ${macApp}`);
+      }
     }
   } else if (process.platform === 'win32') {
-    const deskLnk = path.join(desktopDir, 'Antigravity (CDP).lnk');
-    if (purgeData && fs.existsSync(deskLnk)) {
-      await fsp.rm(deskLnk, { force: true });
-      log(`✓ 已移除桌面快捷方式: ${deskLnk}`);
+    for (const lnkName of ['Antigravity (HUD).lnk', 'Antigravity (CDP).lnk']) {
+      const deskLnk = path.join(desktopDir, lnkName);
+      if (purgeData && fs.existsSync(deskLnk)) {
+        await fsp.rm(deskLnk, { force: true });
+        log(`✓ 已移除桌面快捷方式: ${deskLnk}`);
+      }
     }
   }
 

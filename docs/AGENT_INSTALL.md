@@ -22,8 +22,8 @@
      - 它会自动将插件文件部署至 `~/.gemini/config/plugins/agy-hud/`。
      - 它会自动初始化或保留 `~/.gemini/antigravity/plugin_data/agy-hud/config.json`（自动识别 GitHub 仓库地址以支持检查与自动更新）。
      - 它会自动生成当前系统对应的零侵入 CDP 启动器：
-       - **Windows**：桌面 `Antigravity (CDP).lnk`（默认端口 `9229`，无黑窗）
-       - **macOS**：`~/Applications/Antigravity (CDP).app`（套壳启动器，复用官方图标，不破坏代码签名）
+       - **Windows**：桌面 `Antigravity (HUD).lnk`（默认端口 `9229`，无黑窗）
+       - **macOS**：`~/Applications/Antigravity (HUD).app`（套壳启动器，复用官方图标，不破坏代码签名）
 
 3. **严格安全边界（必须遵守）**
    - **禁止**修改 Antigravity 安装目录、`app.asar` 或手动编辑 `~/.gemini/config/config.json`。

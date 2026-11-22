@@ -27,8 +27,8 @@
 为降低双端维护成本，本项目采用**单一跨平台框架代码库**：
 * **95%+ 跨平台共享**：Sidecar 后端、本地会话解析、速率统计、原生配额客户端、周额度按需估算、GitHub 自更新引擎、CDP WebSocket 注入桥、输入栏 HUD、右侧边栏 UI 以及 `scripts/install.mjs` / `uninstall.mjs` 全部基于 **Node.js 22+ 内置 API 与标准 Web/CDP** 实现，Windows 与 macOS 共用同一套代码。
 * **仅启动器外壳按系统适配**：
-  * **Windows**：生成无黑窗桌面快捷方式 `Antigravity (CDP).lnk`（配合静默 `.vbs`）。
-  * **macOS**：在 `~/Applications/` 生成套壳 `Antigravity (CDP).app`（复用官方 `.icns` 图标，不破坏苹果代码签名与自动更新）。
+  * **Windows**：生成无黑窗桌面快捷方式 `Antigravity (HUD).lnk`（配合静默 `.vbs`）。
+  * **macOS**：在 `~/Applications/` 生成套壳 `Antigravity (HUD).app`（复用官方 `.icns` 图标，不破坏苹果代码签名与自动更新）。
 
 ---
 
@@ -43,7 +43,7 @@
   * **周额度总 Token 与费用估算**：通过「`resetTime` 周期对齐 + 差分锚点」同时兼顾自然重置与官方主动重置/回补，全程使用精确浮点比例计算；只要净消耗变化 `>= 1%` 即自动按比例反推各分组**周额度总 Token 与总费用估算**。
   * **严格按需计算**：后台仅做 `O(1)` 数值锚点比对，绝不扫描日志；仅在打开右侧 `AGY HUD` 边栏时才按需扫描统计。
 * **检查与自动更新**：支持手动检查/升级，或开启定时自动检查与发现新版自动更新（保留全部配置）。
-* **跨平台零侵入 CDP 启动器**：Windows 自动生成无黑窗桌面 `Antigravity (CDP).lnk`；macOS 自动在 `~/Applications/` 生成套壳 `Antigravity (CDP).app`（复用官方图标，不破坏苹果签名）。
+* **跨平台零侵入 CDP 启动器**：Windows 自动生成无黑窗桌面 `Antigravity (HUD).lnk`；macOS 自动在 `~/Applications/` 生成套壳 `Antigravity (HUD).app`（复用官方图标，不破坏苹果签名）。
 
 ---
 
@@ -82,7 +82,7 @@
   git clone https://github.com/Wujuhu/antigravity-hud.git && cd antigravity-hud && chmod +x install.sh && ./install.sh
   ```
 
-安装脚本会自动部署插件至 `~/.gemini/config/plugins/agy-hud`，并自动生成 CDP 启动器（Windows 为桌面 `Antigravity (CDP).lnk`，macOS 为 `~/Applications/Antigravity (CDP).app`）。
+安装脚本会自动部署插件至 `~/.gemini/config/plugins/agy-hud`，并自动生成 CDP 启动器（Windows 为桌面 `Antigravity (HUD).lnk`，macOS 为 `~/Applications/Antigravity (HUD).app`）。
 
 ### 2. 开启并启动（2 步生效）
 
