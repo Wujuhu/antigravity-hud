@@ -29,6 +29,7 @@ test('HUD inject and remove expressions parse cleanly as valid JavaScript', () =
       model: { id: '<script>alert(1)</script>' },
       contextLimit: 512000,
       usedTokens: 51200,
+      compaction: { count: 2, totalSavedTokens: 48000 },
     },
   });
 
@@ -39,6 +40,8 @@ test('HUD inject and remove expressions parse cleanly as valid JavaScript', () =
   assert.doesNotThrow(() => new Function(removeExpr));
   assert.match(injectExpr, new RegExp(HUD_ROOT_ID));
   assert.match(injectExpr, new RegExp(HUD_POPOVER_ID));
+  assert.match(injectExpr, /"compactionCount":2/);
+  assert.match(injectExpr, /压缩 /);
   // Ensure custom order is embedded in payload
   assert.ok(injectExpr.indexOf('"id":"quota"') < injectExpr.indexOf('"id":"context"'));
 });

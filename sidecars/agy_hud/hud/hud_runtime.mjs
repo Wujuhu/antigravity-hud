@@ -536,11 +536,13 @@ export function buildHudInjectExpression(snapshot, config) {
                 '</span>';
             }
           }
+          var compCount = Number(ctx.compactionCount || 0);
+          var compHtml = compCount > 0 ? ' · 压缩 ' + esc(compCount) + '次' : '';
           blocks.push(
             '<div class="agy-sec">' +
               '<div class="agy-row">' +
                 '<span class="agy-title">' + esc(mdl.id || mdl.label || '上下文') + '</span>' +
-                '<span class="agy-muted">' + esc(fmtTok(ctx.usedTokens)) + ' / ' + esc(fmtTok(ctx.contextLimit)) + ' · ' + esc(pct.toFixed(1)) + '%</span>' +
+                '<span class="agy-muted">' + esc(fmtTok(ctx.usedTokens)) + ' / ' + esc(fmtTok(ctx.contextLimit)) + ' · ' + esc(pct.toFixed(1)) + '%' + compHtml + '</span>' +
               '</div>' +
               '<div class="agy-bar-track">' + segs + '</div>' +
               (legends ? '<div class="agy-legend">' + legends + '</div>' : '') +
