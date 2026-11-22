@@ -808,22 +808,26 @@ export function buildHudInjectExpression(snapshot, config) {
     }
 
     function bindHoverEvents(pillEl, popEl) {
-      function runOpenSidecarFlow(ev) {
+      function handleOpenSidecarTrigger(ev) {
         var link = ev.target && ev.target.closest ? ev.target.closest('[data-agy-action="open-sidecar"]') : null;
         if (!link) return;
-        if (ev.type === 'pointerdown' && typeof ev.button === 'number' && ev.button !== 0) return;
+        if (ev.type === 'mousedown' && ev.button !== 0) return;
         ev.preventDefault();
         ev.stopPropagation();
 
-        // Deduplicate pointerdown + click firing for the same physical click
-        var now = Date.now();
-        if (window.__agyHudOpenSidecarAt && now - window.__agyHudOpenSidecarAt < 350) return;
-        window.__agyHudOpenSidecarAt = now;
-
+        // Deduplicate paired mousedown + click within 350ms
+        var nowTs = Date.now();
+        if (window.__agyHudLastOpenSidecarTs && nowTs - window.__agyHudLastOpenSidecarTs < 350) {
+          return;
+        }
+        window.__agyHudLastOpenSidecarTs = nowTs;
         popEl.classList.remove('is-visible');
 
-        var runSeq = (window.__agyHudOpenSidecarSeq || 0) + 1;
-        window.__agyHudOpenSidecarSeq = runSeq;
+        var opSeq = (window.__agyHudSidecarOpSeq = (window.__agyHudSidecarOpSeq || 0) + 1);
+
+        function isCurrent() {
+          return window.__agyHudSidecarOpSeq === opSeq;
+        }
 
         function isVisible(el) {
           if (!el || !el.getBoundingClientRect) return false;
@@ -831,24 +835,40 @@ export function buildHudInjectExpression(snapshot, config) {
           return r.width > 0 && r.height > 0;
         }
 
-        function waitFor(probeFn, onFound, timeoutMs) {
-          var deadline = Date.now() + (timeoutMs || 2000);
+        function fireClick(el) {
+          if (!el) return;
+          try {
+            el.focus && el.focus({ preventScroll: true });
+          } catch (e) {}
+          try {
+            el.click();
+          } catch (e) {}
+        }
+
+        function waitUntil(probeFn, onReady, timeoutMs, intervalMs) {
+          var deadline = Date.now() + (timeoutMs || 1500);
+          var step = intervalMs || 70;
           function tick() {
-            if (window.__agyHudOpenSidecarSeq !== runSeq) return;
+            if (!isCurrent()) return;
             var res = null;
-            try { res = probeFn(); } catch (e) { res = null; }
+            try {
+              res = probeFn();
+            } catch (e) {
+              res = null;
+            }
             if (res) {
-              onFound(res);
+              onReady(res);
               return;
             }
-            if (Date.now() >= deadline) return;
-            setTimeout(tick, 50);
+            if (Date.now() < deadline) {
+              setTimeout(tick, step);
+            }
           }
           tick();
         }
 
         function findVisibleAgyHudItem() {
-          var nodes = document.querySelectorAll('[data-testid="plugins-submenu-item"], button, [role="tab"], [role="menuitem"]');
+          var nodes = document.querySelectorAll('[data-testid="plugins-submenu-item"], [role="tab"], [role="menuitem"], button');
           for (var i = 0; i < nodes.length; i++) {
             var n = nodes[i];
             if (popEl.contains(n) || (pillEl && pillEl.contains(n))) continue;
@@ -862,74 +882,106 @@ export function buildHudInjectExpression(snapshot, config) {
           return null;
         }
 
-        function openFromPluginsOrDirect(timeoutMs) {
-          waitFor(function() {
-            var direct = findVisibleAgyHudItem();
-            if (direct) return { kind: 'direct', el: direct };
-            var extCard = document.querySelector('[data-testid="new-tab-card-extensions"]');
-            if (extCard && isVisible(extCard)) return { kind: 'ext', el: extCard };
-            return null;
-          }, function(found) {
-            found.el.click();
-            if (found.kind === 'ext') {
-              waitFor(findVisibleAgyHudItem, function(item) {
-                item.click();
-              }, 1800);
-            }
-          }, timeoutMs || 1800);
+        function findVisibleExtCard() {
+          var extCard = document.querySelector('[data-testid="new-tab-card-extensions"]');
+          return extCard && isVisible(extCard) ? extCard : null;
         }
 
-        function selectOrCreateAgyHudTab(waitForExpandedBtn) {
-          waitFor(function() {
-            if (waitForExpandedBtn && waitForExpandedBtn.getAttribute('aria-expanded') !== 'true') {
+        function findVisiblePlusBtn() {
+          var plusBtn = document.querySelector('[data-testid="side-panel-new-tab-button"]');
+          return plusBtn && isVisible(plusBtn) ? plusBtn : null;
+        }
+
+        function openFromPluginsCard(extCard) {
+          fireClick(extCard);
+          var retried = false;
+          var startedAt = Date.now();
+          waitUntil(
+            function() {
+              var item = findVisibleAgyHudItem();
+              if (item) return item;
+              // On first cold launch, the first click during drawer animation can be swallowed; retry once
+              if (!retried && Date.now() - startedAt > 360) {
+                var cardAgain = findVisibleExtCard();
+                if (cardAgain) {
+                  retried = true;
+                  fireClick(cardAgain);
+                }
+              }
               return null;
-            }
-            var direct = findVisibleAgyHudItem();
-            if (direct) return { kind: 'direct', el: direct };
-            var extCard = document.querySelector('[data-testid="new-tab-card-extensions"]');
-            if (extCard && isVisible(extCard)) return { kind: 'ext', el: extCard };
-            var plusBtn = document.querySelector('[data-testid="side-panel-new-tab-button"]');
-            if (plusBtn && isVisible(plusBtn)) return { kind: 'plus', el: plusBtn };
-            return null;
-          }, function(found) {
-            if (found.kind === 'direct') {
-              found.el.click();
-              return;
-            }
-            if (found.kind === 'ext') {
-              found.el.click();
-              waitFor(findVisibleAgyHudItem, function(item) {
-                item.click();
-              }, 1800);
-              return;
-            }
-            if (found.kind === 'plus') {
-              found.el.click();
-              setTimeout(function() {
-                openFromPluginsOrDirect(1800);
-              }, 60);
-            }
-          }, 2200);
+            },
+            function(item) {
+              fireClick(item);
+            },
+            1800,
+            70,
+          );
+        }
+
+        function selectOrAddAgyHudTab() {
+          // Wait for any side-panel entry point to finish mounting (handles cold-start lazy mount)
+          waitUntil(
+            function() {
+              var direct = findVisibleAgyHudItem();
+              if (direct) return { kind: 'direct', el: direct };
+              var extCard = findVisibleExtCard();
+              if (extCard) return { kind: 'ext', el: extCard };
+              var plusBtn = findVisiblePlusBtn();
+              if (plusBtn) return { kind: 'plus', el: plusBtn };
+              return null;
+            },
+            function(found) {
+              if (found.kind === 'direct') {
+                fireClick(found.el);
+                return;
+              }
+              if (found.kind === 'ext') {
+                openFromPluginsCard(found.el);
+                return;
+              }
+              if (found.kind === 'plus') {
+                fireClick(found.el);
+                waitUntil(
+                  function() {
+                    var item = findVisibleAgyHudItem();
+                    if (item) return { kind: 'direct', el: item };
+                    var card = findVisibleExtCard();
+                    if (card) return { kind: 'ext', el: card };
+                    return null;
+                  },
+                  function(next) {
+                    if (next.kind === 'direct') fireClick(next.el);
+                    else openFromPluginsCard(next.el);
+                  },
+                  1600,
+                  70,
+                );
+              }
+            },
+            1800,
+            70,
+          );
         }
 
         var toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
         var isExpanded = toggleBtn ? toggleBtn.getAttribute('aria-expanded') === 'true' : false;
+        var panelAlreadyMounted = Boolean(findVisibleAgyHudItem() || findVisibleExtCard() || findVisiblePlusBtn());
 
-        if (!isExpanded && toggleBtn && isVisible(toggleBtn)) {
-          toggleBtn.click();
+        if (!isExpanded && !panelAlreadyMounted && toggleBtn && isVisible(toggleBtn)) {
+          fireClick(toggleBtn);
+          // Give React one micro-frame to begin expanding, then poll until panel children mount
           setTimeout(function() {
-            selectOrCreateAgyHudTab(toggleBtn);
-          }, 40);
+            if (isCurrent()) selectOrAddAgyHudTab();
+          }, 80);
           return;
         }
 
-        selectOrCreateAgyHudTab(null);
+        selectOrAddAgyHudTab();
       }
 
-      // Always replace handlers on popEl so hot-reloaded updates take effect immediately;
-      // binding both pointerdown and click prevents lost clicks during DOM updates.
-      popEl.onpointerdown = runOpenSidecarFlow;
-      popEl.onclick = runOpenSidecarFlow;
+      // Always replace both mousedown (immune to DOM re-render between down/up) and click (keyboard/a11y)
+      popEl.onmousedown = handleOpenSidecarTrigger;
+      popEl.onclick = handleOpenSidecarTrigger;
 
       if (pillEl.__agyHudBound) return;
       pillEl.__agyHudBound = true;

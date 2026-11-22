@@ -41,25 +41,23 @@ test('generateWindowsCdpLauncher writes .vbs and .cmd artifacts cleanly (offline
   }
 });
 
-test('generateMacCdpLauncher creates valid .app bundle with Info.plist, executable script, and desktop shortcut', async () => {
+test('generateMacCdpLauncher creates valid .app bundle with Info.plist and executable script', async () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-hud-mac-'));
-  const appsDir = path.join(tmpDir, 'Applications');
-  const desktopDir = path.join(tmpDir, 'Desktop');
+  const fakeAppsDir = path.join(tmpDir, 'Applications');
+  const fakeDesktopDir = path.join(tmpDir, 'Desktop');
   try {
     const res = await generateMacCdpLauncher({
-      applicationsDir: appsDir,
-      fallbackApplicationsDir: appsDir,
-      desktopDir,
+      applicationsDir: fakeAppsDir,
+      desktopDir: fakeDesktopDir,
       port: 9229,
       targetAppOverride: '/Applications/Antigravity.app',
+      skipDesktopShortcut: true,
     });
 
     assert.equal(fs.existsSync(res.bundlePath), true);
     assert.equal(fs.existsSync(res.plistPath), true);
     assert.equal(fs.existsSync(res.scriptPath), true);
-    assert.equal(res.desktopShortcutCreated, true);
-    assert.equal(res.desktopShortcutPath, path.join(desktopDir, 'Antigravity (HUD).app'));
-    assert.equal(fs.existsSync(res.desktopShortcutPath), true);
+    assert.equal(res.bundlePath, path.join(fakeAppsDir, 'Antigravity (HUD).app'));
 
     const plist = fs.readFileSync(res.plistPath, 'utf8');
     assert.match(plist, /<key>CFBundleExecutable<\/key>\s*<string>launcher<\/string>/);

@@ -64,17 +64,17 @@
      chmod +x install.sh && ./install.sh
      ```
 2. 安装脚本会自动把插件复制到 `~/.gemini/config/plugins/agy-hud`，并生成当前系统的启动器：
-   - **Windows**：桌面 `Antigravity (HUD).lnk`
-   - **macOS**：`/Applications/Antigravity (HUD).app` + 桌面快捷方式 `~/Desktop/Antigravity (HUD).app`
+   - **Windows**：桌面 `Antigravity (HUD).lnk` 快捷方式
+   - **macOS**：`/Applications/Antigravity (HUD).app`，同时在桌面创建指向它的快捷方式
 3. **安装完成后即可直接删除刚才下载的 ZIP 和解压文件夹**，不影响运行与后续自动更新。
 
 ### 启用生效
 
-彻底退出 Antigravity（Windows 退出右下角托盘图标 / macOS 按 `Cmd + Q`），再通过生成的对应启动器重新打开即可生效：
+先**完整退出** Antigravity（Windows 退出右下角托盘 / macOS 按 `Cmd + Q`），再通过刚生成的启动器重新打开即可生效：
 - **Windows**：双击桌面 `Antigravity (HUD).lnk` 快捷方式
-- **macOS**：打开 `/Applications/Antigravity (HUD).app` 或桌面快捷方式 `~/Desktop/Antigravity (HUD).app`
+- **macOS**：打开 `/Applications/Antigravity (HUD).app` 或桌面快捷方式
 
-> **提示**：以后日常启动也请始终通过对应的启动器打开 Antigravity，才能使用输入框状态栏、悬停详情、每轮汇总与排版调节等完整功能。
+> **提示**：以后日常启动也请始终通过对应的启动器打开 Antigravity，才能使用输入栏 HUD、悬停详情、每轮总信息栏与界面排版等完整功能。
 
 ---
 
@@ -86,7 +86,7 @@
   ```
 - **手动卸载**：
   - 删除插件目录 `~/.gemini/config/plugins/agy-hud` 即可停用并保留配置。
-  - 如需彻底清除：一并删除 `~/.gemini/antigravity/plugin_data/agy-hud` 与生成的启动器（Windows 桌面 `Antigravity (HUD).lnk`；macOS `/Applications/Antigravity (HUD).app` 与桌面快捷方式 `~/Desktop/Antigravity (HUD).app`）。
+  - 如需彻底清除：一并删除 `~/.gemini/antigravity/plugin_data/agy-hud` 与生成的启动器（Windows 桌面 `Antigravity (HUD).lnk`；macOS `/Applications/Antigravity (HUD).app` 及桌面快捷方式）。
   - 若本地仍保留安装包目录，也可直接运行 `uninstall.cmd` / `./uninstall.sh`（彻底清理加 `--purge-data`）。
 
 ---

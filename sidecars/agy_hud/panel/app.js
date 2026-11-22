@@ -266,7 +266,7 @@
 
   function buildLauncherSuccessMessage(platform) {
     if (platform === 'darwin') {
-      return '已生成 macOS 启动器与桌面快捷方式。请按 Cmd+Q 彻底退出 Antigravity，再通过下方应用重新启动：';
+      return '已生成 macOS 启动器。请按 Cmd+Q 彻底退出 Antigravity，再打开下方 .app 应用重新启动：';
     }
     if (platform === 'win32') {
       return '已生成 Windows 启动器。请彻底退出 Antigravity（含托盘图标），再双击下方快捷方式重新启动：';

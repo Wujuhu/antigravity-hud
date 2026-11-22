@@ -7,7 +7,7 @@
  * - Preserves existing user settings in ~/.gemini/antigravity/plugin_data/agy-hud
  * - Generates the OS-appropriate CDP launcher:
  *     Windows: Desktop `Antigravity (HUD).lnk` (+ silent .vbs/.cmd)
- *     macOS:   `~/Applications/Antigravity (HUD).app` wrapper bundle
+ *     macOS:   `/Applications/Antigravity (HUD).app` + Desktop shortcut
  * - Never touches Antigravity app.asar or ~/.gemini/config/config.json
  */
 
@@ -137,7 +137,7 @@ export async function installPlugin({
         port: savedCfg.cdpPort,
       });
       log(`[4/4] 已生成 macOS 启动器: ${launcher.bundlePath}`);
-      if (launcher.desktopShortcutCreated && launcher.desktopShortcutPath) {
+      if (launcher.desktopShortcutPath) {
         log(`      已创建桌面快捷方式: ${launcher.desktopShortcutPath}`);
       }
     } else {
@@ -153,8 +153,8 @@ export async function installPlugin({
   }
 
   log('');
-  log('安装完成！接下来只需一步即可启用：');
-  log('  先彻底退出 Antigravity（Windows 退出右下角托盘图标 / macOS 按 Cmd+Q），再通过刚生成的启动器重新打开即可。');
+  log('安装完成！接下来只需 1 步即可生效：');
+  log('  彻底退出 Antigravity（Windows 退出右下角托盘 / macOS 按 Cmd+Q），再通过刚生成的启动器重新打开即可。');
   log('');
 
   return { targetDir, configFile: store.configFile, config: savedCfg, launcher };
