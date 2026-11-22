@@ -12,6 +12,12 @@
     return String(Math.round(v));
   }
 
+  function fmtUsd(n) {
+    const v = Number(n || 0);
+    if (!Number.isFinite(v) || v <= 0) return '$0.00';
+    return v >= 100 ? `$${v.toFixed(1)}` : `$${v.toFixed(2)}`;
+  }
+
   function fmtDur(ms) {
     const v = Number(ms);
     if (!Number.isFinite(v) || v <= 0) return '';
@@ -142,7 +148,47 @@
     savePatch({ [listKey]: next });
   }
 
+  function renderWeeklyEstimate(we) {
+    const box = $('weeklyEstimateBody');
+    const badge = $('weeklySessionsBadge');
+    if (!we) {
+      badge.textContent = '按需计算';
+      box.innerHTML = '<div class="hint">仅在打开本侧边栏时按需扫描近 7 天会话并估算周额度，后台不占资源。</div>';
+      return;
+    }
+
+    badge.textContent = `近 7 天 · ${we.scannedSessions || 0} 会话`;
+    const estStr = we.hasExtrapolation
+      ? `≈ ${fmtTok(we.estimatedCombinedWeeklyTokens)} · ${fmtUsd(we.estimatedCombinedWeeklyCostUsd)}`
+      : '样本不足 (<5%)';
+
+    const groupRows = (we.groups || [])
+      .map((g) => {
+        const estPart = g.estimatedTotalTokens != null
+          ? `周总量 ≈ ${fmtTok(g.estimatedTotalTokens)} (${fmtUsd(g.estimatedTotalCostUsd)})`
+          : `已用 ${g.weeklyUsedPct ?? '--'}%（≥5% 后推算）`;
+        return `<div class="snap-quota-row"><span>${g.label} · 7d ${fmtTok(g.actualTokens7d)} (${fmtUsd(g.actualCostUsd7d)})</span><span>${estPart}</span></div>`;
+      })
+      .join('');
+
+    box.innerHTML = `
+      <div class="snap-kv-grid">
+        <div class="snap-box">
+          <div class="snap-label">近 7 天实耗 Token / 等价费用</div>
+          <div class="snap-val">${fmtTok(we.actualTotalTokens7d)} · ${fmtUsd(we.actualTotalCostUsd7d)}</div>
+        </div>
+        <div class="snap-box">
+          <div class="snap-label">周额度总容量推算</div>
+          <div class="snap-val">${estStr}</div>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:2px">近 7 天 Prompt Cache 累计节省约 <strong>${fmtUsd(we.actualCacheSavedUsd7d)}</strong>（仅打开本面板时按需计算）</div>
+      <div>${groupRows || '<div class="hint">暂无原生周配额分组数据，仅展示近 7 天本地实耗统计。</div>'}</div>
+    `;
+  }
+
   function renderSnapshot(snap) {
+    renderWeeklyEstimate(snap?.weeklyEstimate || null);
     const body = $('liveSnapshotBody');
     if (!snap || !snap.found) {
       $('modelBadge').textContent = '等待对话';
@@ -194,7 +240,36 @@
 
   function render() {
     if (!state) return;
-    const { config, cdpStatus, platform, launcherInfo, catalogs, snapshot } = state;
+    const { config, cdpStatus, platform, launcherInfo, catalogs, snapshot, currentVersion, updateStatus } = state;
+
+    $('versionBadge').textContent = `v${currentVersion || '1.0.0'}`;
+    if (document.activeElement !== $('inputRepoSlug')) {
+      $('inputRepoSlug').value = config.updateRepoSlug || '';
+    }
+    $('chkAutoCheckUpdate').checked = Boolean(config.autoCheckUpdate);
+    $('chkAutoApplyUpdate').checked = Boolean(config.autoApplyUpdate);
+
+    const btnApply = $('btnApplyUpdate');
+    const uText = $('updateStatusText');
+    if (updateStatus?.applying) {
+      btnApply.disabled = true;
+      uText.textContent = '正在下载并应用更新...';
+    } else if (updateStatus?.appliedVersion) {
+      btnApply.disabled = true;
+      uText.textContent = `已更新至 v${updateStatus.appliedVersion}，请重启 Antigravity 生效`;
+    } else if (updateStatus?.hasUpdate) {
+      btnApply.disabled = false;
+      uText.textContent = `发现新版 v${updateStatus.latestVersion}`;
+    } else if (updateStatus?.error) {
+      btnApply.disabled = true;
+      uText.textContent = updateStatus.error;
+    } else if (updateStatus?.ok) {
+      btnApply.disabled = true;
+      uText.textContent = `已是最新 (v${updateStatus.latestVersion})`;
+    } else {
+      btnApply.disabled = true;
+      uText.textContent = config.updateRepoSlug ? '点击检查更新' : '填好仓库后即可检查更新';
+    }
 
     const dot = $('statusDot');
     const sub = $('statusSub');
@@ -270,7 +345,33 @@
       render();
     }
   });
+  $('btnSaveRepo').addEventListener('click', () => {
+    savePatch({ updateRepoSlug: $('inputRepoSlug').value.trim() });
+  });
+  $('chkAutoCheckUpdate').addEventListener('change', (e) => {
+    savePatch({ autoCheckUpdate: e.target.checked });
+  });
+  $('chkAutoApplyUpdate').addEventListener('change', (e) => {
+    savePatch({ autoApplyUpdate: e.target.checked });
+  });
+  $('btnCheckUpdate').addEventListener('click', async () => {
+    $('updateStatusText').textContent = '正在检查 GitHub Releases...';
+    state = await api('POST', '/api/update/check', {});
+    render();
+  });
+  $('btnApplyUpdate').addEventListener('click', async () => {
+    $('btnApplyUpdate').disabled = true;
+    $('updateStatusText').textContent = '正在下载并安装更新...';
+    const res = await api('POST', '/api/update/apply', {});
+    if (res?.state) state = res.state;
+    render();
+  });
 
   refresh();
-  setInterval(refresh, 3000);
+  setInterval(() => {
+    if (!document.hidden) refresh();
+  }, 3000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) refresh();
+  });
 })();

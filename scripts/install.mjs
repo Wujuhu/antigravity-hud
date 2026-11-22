@@ -11,6 +11,7 @@
  * - Never touches Antigravity app.asar or ~/.gemini/config/config.json
  */
 
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
@@ -22,6 +23,7 @@ import {
   createConfigStore,
   resolveDataDir,
 } from '../sidecars/agy_hud/backend/config.mjs';
+import { validateRepoSlug } from '../sidecars/agy_hud/backend/updater.mjs';
 import { generateWindowsCdpLauncher } from '../sidecars/agy_hud/backend/launcher_win.mjs';
 import { generateMacCdpLauncher } from '../sidecars/agy_hud/backend/launcher_mac.mjs';
 
@@ -29,6 +31,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
 const DEFAULT_PLUGIN_DIR = path.join(os.homedir(), '.gemini', 'config', 'plugins', 'agy-hud');
+
+function detectGitHubRepoSlug(repoDir) {
+  try {
+    const remote = execFileSync('git', ['remote', 'get-url', 'origin'], {
+      cwd: repoDir,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 3000,
+    }).trim();
+    const m = remote.match(/github\.com[:/]([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:\.git)?$/i);
+    return m ? validateRepoSlug(m[1]) : '';
+  } catch {
+    return '';
+  }
+}
 
 export function checkNodeVersion(versionStr = process.versions.node) {
   const [major = 0, minor = 0] = String(versionStr || '0.0.0')
@@ -57,6 +74,7 @@ export async function installPlugin({
   targetDir = DEFAULT_PLUGIN_DIR,
   dataDir = resolveDataDir(),
   cdpPort = null,
+  repoSlug = '',
   skipLauncher = false,
   silent = false,
 } = {}) {
@@ -99,7 +117,11 @@ export async function installPlugin({
   const store = createConfigStore(dataDir);
   const currentCfg = store.get();
   const effectivePort = Number(cdpPort) || currentCfg.cdpPort || DEFAULT_CDP_PORT;
-  const savedCfg = await store.save({ cdpPort: effectivePort });
+  const detectedSlug = validateRepoSlug(repoSlug) || currentCfg.updateRepoSlug || detectGitHubRepoSlug(sourceRoot);
+  const savedCfg = await store.save({
+    cdpPort: effectivePort,
+    ...(detectedSlug ? { updateRepoSlug: detectedSlug } : {}),
+  });
   log(`[3/4] 配置文件已就绪（保留既有自定义排序）: ${store.configFile}`);
 
   let launcher = null;
@@ -142,6 +164,7 @@ function parseCliArgs(argv) {
     const arg = argv[i];
     if (arg === '--skip-launcher') opts.skipLauncher = true;
     else if (arg === '--port' && argv[i + 1]) opts.cdpPort = Number(argv[++i]);
+    else if (arg === '--repo' && argv[i + 1]) opts.repoSlug = argv[++i];
     else if (arg === '--target' && argv[i + 1]) opts.targetDir = path.resolve(argv[++i]);
   }
   return opts;

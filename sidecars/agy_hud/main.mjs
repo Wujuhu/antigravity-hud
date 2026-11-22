@@ -24,10 +24,21 @@ import {
   buildHudInjectExpression,
   buildHudRemoveExpression,
 } from './hud/hud_runtime.mjs';
+import {
+  buildWeeklyQuotaEstimates,
+  scanWeeklyLocalUsage,
+} from './backend/weekly_usage.mjs';
+import {
+  applyPluginUpdate,
+  checkForUpdates,
+  readInstalledVersion,
+} from './backend/updater.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const PLUGIN_ROOT = join(__dirname, '..', '..');
 const PANEL_DIR = join(__dirname, 'panel');
 const NO_STORE = { 'Cache-Control': 'no-store' };
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 const configStore = createConfigStore();
 const quotaClient = createQuotaClient();
@@ -42,19 +53,33 @@ let latestCdpStatus = {
   error: '尚未同步',
 };
 let latestLauncherInfo = null;
+let latestUpdateStatus = {
+  ok: false,
+  configured: Boolean(configStore.get().updateRepoSlug),
+  currentVersion: readInstalledVersion(PLUGIN_ROOT),
+  latestVersion: readInstalledVersion(PLUGIN_ROOT),
+  hasUpdate: false,
+  applying: false,
+  appliedVersion: '',
+  checkedAtMs: null,
+  error: '',
+};
 let syncInFlight = false;
 let pollTimer = null;
+let updateTimer = null;
 
 async function syncOnce({ forceQuota = false } = {}) {
   if (syncInFlight) return latestSnapshot;
   syncInFlight = true;
   try {
     const config = configStore.get();
+    // Background HUD sync stays lightweight: never scan 7-day weekly usage here
     const snapshot = await collectLiveSnapshot({
       conversationId: activeConversationId,
       quotaClient,
       config,
       forceQuota,
+      includeWeeklyEstimate: false,
     });
     latestSnapshot = snapshot;
 
@@ -88,6 +113,67 @@ function restartPollingLoop() {
   pollTimer.unref?.();
 }
 
+async function runUpdateCheck({ allowAutoApply = false } = {}) {
+  const cfg = configStore.get();
+  const currentVersion = readInstalledVersion(PLUGIN_ROOT);
+  const res = await checkForUpdates({
+    repoSlug: cfg.updateRepoSlug,
+    currentVersion,
+  });
+  latestUpdateStatus = {
+    ...latestUpdateStatus,
+    ...res,
+    applying: false,
+  };
+
+  if (allowAutoApply && cfg.autoApplyUpdate && res.ok && res.hasUpdate && res.downloadUrl) {
+    await runApplyUpdate();
+  }
+  return latestUpdateStatus;
+}
+
+async function runApplyUpdate() {
+  if (!latestUpdateStatus?.downloadUrl) {
+    await runUpdateCheck({ allowAutoApply: false });
+  }
+  if (!latestUpdateStatus?.downloadUrl) {
+    return { ok: false, error: latestUpdateStatus?.error || '未找到可下载的更新包' };
+  }
+  latestUpdateStatus = { ...latestUpdateStatus, applying: true, error: '' };
+  try {
+    const applied = await applyPluginUpdate({
+      downloadUrl: latestUpdateStatus.downloadUrl,
+      targetPluginDir: PLUGIN_ROOT,
+    });
+    latestUpdateStatus = {
+      ...latestUpdateStatus,
+      applying: false,
+      hasUpdate: false,
+      currentVersion: applied.updatedVersion,
+      appliedVersion: applied.updatedVersion,
+      error: '',
+    };
+    return { ok: true, applied };
+  } catch (err) {
+    latestUpdateStatus = {
+      ...latestUpdateStatus,
+      applying: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+    return { ok: false, error: latestUpdateStatus.error };
+  }
+}
+
+function restartUpdateLoop() {
+  if (updateTimer) clearInterval(updateTimer);
+  const cfg = configStore.get();
+  if (!cfg.autoCheckUpdate || !cfg.updateRepoSlug) return;
+  updateTimer = setInterval(() => {
+    runUpdateCheck({ allowAutoApply: true }).catch(() => {});
+  }, UPDATE_CHECK_INTERVAL_MS);
+  updateTimer.unref?.();
+}
+
 async function generatePlatformLauncher() {
   const cfg = configStore.get();
   if (process.platform === 'win32') {
@@ -109,13 +195,24 @@ async function generatePlatformLauncher() {
   return latestLauncherInfo;
 }
 
-function buildStatePayload() {
+function buildStatePayload({ includeWeekly = false, forceWeekly = false } = {}) {
+  let weeklyEstimate = null;
+  if (includeWeekly) {
+    // On-demand calculation: runs ONLY when the sidecar UI panel is open and querying
+    const weeklyUsage = scanWeeklyLocalUsage({ force: forceWeekly });
+    weeklyEstimate = buildWeeklyQuotaEstimates(
+      weeklyUsage,
+      latestSnapshot?.quota?.groups || [],
+    );
+  }
   return {
     platform: process.platform,
+    currentVersion: readInstalledVersion(PLUGIN_ROOT),
     config: configStore.get(),
-    snapshot: latestSnapshot,
+    snapshot: latestSnapshot ? { ...latestSnapshot, weeklyEstimate } : null,
     cdpStatus: latestCdpStatus,
     launcherInfo: latestLauncherInfo,
+    updateStatus: latestUpdateStatus,
     catalogs: {
       pillItems: PILL_ITEM_CATALOG,
       popoverSections: POPOVER_SECTION_CATALOG,
@@ -130,12 +227,12 @@ async function handleApiRequest(method, urlPath, bodyObj = {}, queryConvId = '')
     if (!latestSnapshot) {
       await syncOnce();
     }
-    return buildStatePayload();
+    return buildStatePayload({ includeWeekly: true, forceWeekly: false });
   }
 
   if (method === 'POST' && urlPath === '/api/refresh') {
     await syncOnce({ forceQuota: true });
-    return buildStatePayload();
+    return buildStatePayload({ includeWeekly: true, forceWeekly: true });
   }
 
   if (method === 'POST' && urlPath === '/api/config') {
@@ -148,20 +245,32 @@ async function handleApiRequest(method, urlPath, bodyObj = {}, queryConvId = '')
       }).catch(() => {});
     }
     restartPollingLoop();
+    restartUpdateLoop();
     await syncOnce();
-    return buildStatePayload();
+    return buildStatePayload({ includeWeekly: true });
   }
 
   if (method === 'POST' && urlPath === '/api/config/reset') {
     await configStore.reset();
     restartPollingLoop();
+    restartUpdateLoop();
     await syncOnce();
-    return buildStatePayload();
+    return buildStatePayload({ includeWeekly: true });
+  }
+
+  if (method === 'POST' && urlPath === '/api/update/check') {
+    await runUpdateCheck({ allowAutoApply: false });
+    return buildStatePayload({ includeWeekly: true });
+  }
+
+  if (method === 'POST' && urlPath === '/api/update/apply') {
+    const result = await runApplyUpdate();
+    return { ...result, state: buildStatePayload({ includeWeekly: true }) };
   }
 
   if (method === 'POST' && urlPath === '/api/launcher/generate') {
     const info = await generatePlatformLauncher();
-    return { ok: true, launcherInfo: info, state: buildStatePayload() };
+    return { ok: true, launcherInfo: info, state: buildStatePayload({ includeWeekly: true }) };
   }
 
   if (method === 'POST' && urlPath === '/api/cdp/remove') {
@@ -178,7 +287,14 @@ async function handleApiRequest(method, urlPath, bodyObj = {}, queryConvId = '')
 
 async function start() {
   restartPollingLoop();
+  restartUpdateLoop();
   syncOnce().catch(() => {});
+  const initCfg = configStore.get();
+  if (initCfg.autoCheckUpdate && initCfg.updateRepoSlug) {
+    setTimeout(() => {
+      runUpdateCheck({ allowAutoApply: true }).catch(() => {});
+    }, 5000).unref?.();
+  }
 
   // Try Antigravity's native sidecar_sdk first; fall back to standalone HTTP server for local preview/debug
   let sdk = null;
@@ -220,6 +336,8 @@ async function start() {
       '/api/config/reset',
       '/api/launcher/generate',
       '/api/cdp/remove',
+      '/api/update/check',
+      '/api/update/apply',
     ]) {
       app.api(postRoute, async (data) => {
         const conv = app.config?.conversationId || '';

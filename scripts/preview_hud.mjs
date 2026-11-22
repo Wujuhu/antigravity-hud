@@ -83,6 +83,18 @@ const sampleSnapshot = assembleHudSnapshot({
       },
     ],
   },
+  weeklyUsage: {
+    windowDays: 7,
+    scannedSessions: 19,
+    totalTokens: 18450000,
+    totalCostUsd: 26.84,
+    totalCacheSavedUsd: 31.2,
+    byGroup: {
+      gemini: { tokens: 12600000, costUsd: 16.4, cacheSavedUsd: 21.0, turns: 120 },
+      gpt_claude: { tokens: 1450000, costUsd: 2.14, cacheSavedUsd: 1.8, turns: 18 },
+      argon: { tokens: 4400000, costUsd: 8.3, cacheSavedUsd: 8.4, turns: 34 },
+    },
+  },
 });
 
 const defaultCfg = createDefaultConfig();

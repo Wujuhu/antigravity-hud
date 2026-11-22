@@ -89,7 +89,56 @@
       <ul class="sortable-list" id="popoverSectionsList"></ul>
     </section>
 
-    <!-- 4. 实时遥测快照（免 CDP 也可直接查看） -->
+    <!-- 4. 版本与自动更新 -->
+    <section class="card">
+      <div class="card-head">
+        <h2>检查与自动更新</h2>
+        <span class="badge" id="versionBadge">v1.0.0</span>
+      </div>
+
+      <div class="field-row">
+        <label for="inputRepoSlug">GitHub 仓库 (owner/repo)</label>
+        <div class="port-group">
+          <input id="inputRepoSlug" type="text" placeholder="username/agy-hud" />
+          <button class="btn btn-primary" id="btnSaveRepo">保存</button>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <span>定时自动检查 GitHub 新版本</span>
+        <label class="switch">
+          <input type="checkbox" id="chkAutoCheckUpdate" checked />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <span>发现新版本时自动下载并更新（保留配置）</span>
+        <label class="switch">
+          <input type="checkbox" id="chkAutoApplyUpdate" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="launcher-actions" style="margin-top:8px">
+        <div class="port-group">
+          <button class="btn" id="btnCheckUpdate">检查更新</button>
+          <button class="btn btn-accent" id="btnApplyUpdate" disabled>立即更新</button>
+        </div>
+        <span class="hint" id="updateStatusText" style="margin:0">未检查</span>
+      </div>
+    </section>
+
+    <!-- 5. 周额度总 Token 与费用估算（仅打开本侧边栏时按需计算） -->
+    <section class="card">
+      <div class="card-head">
+        <h2>周额度总 Token 与费用估算</h2>
+        <span class="badge" id="weeklySessionsBadge">按需计算</span>
+      </div>
+      <div id="weeklyEstimateBody" class="snapshot-body">加载中...</div>
+    </section>
+
+    <!-- 6. 实时遥测快照（免 CDP 也可直接查看） -->
     <section class="card">
       <div class="card-head">
         <h2>实时遥测快照</h2>

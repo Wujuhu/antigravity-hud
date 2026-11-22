@@ -5,6 +5,10 @@ import {
   resolveConversationAppData,
 } from './analyzer.mjs';
 import { computeSpeedMetricsFromFile } from './speed_tracker.mjs';
+import {
+  buildWeeklyQuotaEstimates,
+  scanWeeklyLocalUsage,
+} from './weekly_usage.mjs';
 
 /**
  * Match a model ID string to one of the normalized quota group keys.
@@ -79,6 +83,7 @@ export function assembleHudSnapshot({
   contextSnap = null,
   speedMetrics = null,
   quotaSummary = null,
+  weeklyUsage = null,
   config = {},
   nowMs = Date.now(),
 } = {}) {
@@ -124,6 +129,32 @@ export function assembleHudSnapshot({
     groups.find((g) => g.key === activeGroupKey) ||
     groups[0] ||
     null;
+
+  const normalizedQuotaGroups = groups.map((g) => ({
+    key: g.key,
+    label: g.label,
+    isActive: activeGroup ? g.key === activeGroup.key : false,
+    fiveHour: g.fiveHour
+      ? {
+          remainingPct: g.fiveHour.remainingPct,
+          remainingMs: g.fiveHour.remainingMs,
+          resetTime: g.fiveHour.resetTime,
+          isFull: Boolean(g.fiveHour.isFull),
+        }
+      : null,
+    weekly: g.weekly
+      ? {
+          remainingPct: g.weekly.remainingPct,
+          remainingMs: g.weekly.remainingMs,
+          resetTime: g.weekly.resetTime,
+          isFull: Boolean(g.weekly.isFull),
+        }
+      : null,
+  }));
+
+  const weeklyEstimate = weeklyUsage
+    ? buildWeeklyQuotaEstimates(weeklyUsage, normalizedQuotaGroups)
+    : null;
 
   return {
     updatedAtMs: nowMs,
@@ -172,28 +203,9 @@ export function assembleHudSnapshot({
       activeFiveHourPct: activeGroup?.fiveHour?.remainingPct ?? null,
       activeFiveHourRemainingMs: activeGroup?.fiveHour?.remainingMs ?? null,
       activeWeeklyPct: activeGroup?.weekly?.remainingPct ?? null,
-      groups: groups.map((g) => ({
-        key: g.key,
-        label: g.label,
-        isActive: activeGroup ? g.key === activeGroup.key : false,
-        fiveHour: g.fiveHour
-          ? {
-              remainingPct: g.fiveHour.remainingPct,
-              remainingMs: g.fiveHour.remainingMs,
-              resetTime: g.fiveHour.resetTime,
-              isFull: Boolean(g.fiveHour.isFull),
-            }
-          : null,
-        weekly: g.weekly
-          ? {
-              remainingPct: g.weekly.remainingPct,
-              remainingMs: g.weekly.remainingMs,
-              resetTime: g.weekly.resetTime,
-              isFull: Boolean(g.weekly.isFull),
-            }
-          : null,
-      })),
+      groups: normalizedQuotaGroups,
     },
+    weeklyEstimate,
   };
 }
 
@@ -206,6 +218,7 @@ export async function collectLiveSnapshot({
   quotaClient = null,
   config = {},
   forceQuota = false,
+  includeWeeklyEstimate = false,
 } = {}) {
   const requested = typeof conversationId === 'string' ? conversationId.trim() : '';
   const convId =
@@ -235,10 +248,16 @@ export async function collectLiveSnapshot({
     }
   }
 
+  // Only scan 7-day local transcripts on demand (when sidecar panel is open)
+  const weeklyUsage = includeWeeklyEstimate
+    ? scanWeeklyLocalUsage({ force: forceQuota })
+    : null;
+
   return assembleHudSnapshot({
     contextSnap,
     speedMetrics,
     quotaSummary,
+    weeklyUsage,
     config,
   });
 }

@@ -34,6 +34,9 @@ export function createDefaultConfig() {
     hoverDelayMs: 150,
     contextDisplayFormat: 'percent',
     windowCapMode: 'auto',
+    updateRepoSlug: '',
+    autoCheckUpdate: true,
+    autoApplyUpdate: false,
     pillItems: PILL_ITEM_CATALOG.map(({ id, defaultEnabled }) => ({
       id,
       enabled: defaultEnabled,
@@ -103,6 +106,9 @@ export function normalizeConfig(raw = {}) {
     hoverDelayMs: clampInt(src.hoverDelayMs, 0, 1000, defaults.hoverDelayMs),
     contextDisplayFormat,
     windowCapMode,
+    updateRepoSlug: typeof src.updateRepoSlug === 'string' ? src.updateRepoSlug.trim().slice(0, 120) : defaults.updateRepoSlug,
+    autoCheckUpdate: typeof src.autoCheckUpdate === 'boolean' ? src.autoCheckUpdate : defaults.autoCheckUpdate,
+    autoApplyUpdate: typeof src.autoApplyUpdate === 'boolean' ? src.autoApplyUpdate : defaults.autoApplyUpdate,
     pillItems: normalizeOrderedItems(src.pillItems, PILL_ITEM_CATALOG, VALID_PILL_IDS),
     popoverSections: normalizeOrderedItems(src.popoverSections, POPOVER_SECTION_CATALOG, VALID_SECTION_IDS),
   };
