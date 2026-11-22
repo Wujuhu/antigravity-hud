@@ -6,9 +6,24 @@
 
 ---
 
-## 界面预览（真实使用截图）
+## 界面预览
 
-> 请将真实使用中的界面截图放入 `docs/screenshots/` 目录（如 `hud-hover.png`、`turn-summary.png`、`sidecar-panel.png`）。
+> 以下界面示意图均使用脱敏 Mock 数据生成，展示输入栏 HUD、悬停详情浮层、每轮底部总信息栏与右侧设置边栏的实际视觉样式。
+
+### 1. 输入栏 HUD 与每轮底部总信息栏
+默认无边框自然融入输入栏（与官方 `Gemini` / `Turbo` 控件完全同字号同基线）；每轮回复底部与官方复制/点赞工具栏同行展示整轮汇总数据（模型 · 缓存命中率 · 总耗时 · 流式 TPS · 总 Token · 等价金额）。
+
+![输入栏 HUD 与每轮底部总信息栏](docs/screenshots/01-hud-and-turn-summary.png)
+
+### 2. 鼠标悬停 HUD 展开详情浮层
+鼠标移上 HUD 时浮现柔和椭圆边框并展开详情卡：五色合体上下文构成条（含压缩次数）、速率与缓存统计、垂直对齐的三组 5h/周圆环额度，右上角支持一键打开右侧设置边栏。
+
+![鼠标悬停 HUD 详情浮层](docs/screenshots/02-hud-hover-popover.png)
+
+### 3. 右侧 AGY HUD 边栏（按需周额度估算、排版与更新）
+仅在打开边栏时按需扫描计算周额度估算；折叠式管理「HUD 数据与顺序」「界面排版（舒适 / 原版 / 紧凑 + 自定义滑块）」「更新（GitHub Releases 检测与自动更新）」及「CDP 状态」。
+
+![右侧 AGY HUD 设置边栏](docs/screenshots/03-sidecar-panel.png)
 
 ---
 

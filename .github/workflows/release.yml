@@ -1,0 +1,90 @@
+name: Release AGY HUD
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  test-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify version matches tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          TAG="${INPUT_TAG:-${GITHUB_REF_NAME}}"
+          echo "RELEASE_TAG=${TAG}" >> "$GITHUB_ENV"
+          TAG_VER="${TAG#v}"
+          PLUGIN_VER=$(node -p "JSON.parse(require('node:fs').readFileSync('plugin.json','utf8')).version")
+          PKG_VER=$(node -p "JSON.parse(require('node:fs').readFileSync('package.json','utf8')).version")
+          echo "Tag: ${TAG} (semver: ${TAG_VER}), plugin.json: ${PLUGIN_VER}, package.json: ${PKG_VER}"
+          if [ "${TAG_VER}" != "${PLUGIN_VER}" ] || [ "${TAG_VER}" != "${PKG_VER}" ]; then
+            echo "::error::Version mismatch: tag=${TAG_VER}, plugin.json=${PLUGIN_VER}, package.json=${PKG_VER}"
+            exit 1
+          fi
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build release archive
+        run: |
+          STAGE_DIR="dist/stage/agy-hud"
+          ZIP_PATH="dist/agy-hud-${RELEASE_TAG}.zip"
+          mkdir -p "${STAGE_DIR}"
+
+          for item in \
+            plugin.json \
+            package.json \
+            LICENSE \
+            THIRD_PARTY_NOTICES.md \
+            README.md \
+            install.cmd \
+            install.sh \
+            uninstall.cmd \
+            uninstall.sh \
+            assets \
+            docs \
+            scripts \
+            sidecars
+          do
+            if [ -e "${item}" ]; then
+              cp -a "${item}" "${STAGE_DIR}/"
+            fi
+          done
+
+          chmod +x "${STAGE_DIR}/install.sh" "${STAGE_DIR}/uninstall.sh"
+          (cd dist/stage && zip -rq "../agy-hud-${RELEASE_TAG}.zip" agy-hud)
+          (cd dist && sha256sum "agy-hud-${RELEASE_TAG}.zip" > "agy-hud-${RELEASE_TAG}.zip.sha256")
+          ls -lh dist/
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ZIP_FILE="dist/agy-hud-${RELEASE_TAG}.zip"
+          SHA_FILE="dist/agy-hud-${RELEASE_TAG}.zip.sha256"
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" "${ZIP_FILE}" "${SHA_FILE}" --clobber
+          else
+            gh release create "${RELEASE_TAG}" "${ZIP_FILE}" "${SHA_FILE}" \
+              --title "AGY HUD ${RELEASE_TAG}" \
+              --generate-notes
+          fi
