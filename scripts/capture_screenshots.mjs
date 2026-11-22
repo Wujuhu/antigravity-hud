@@ -151,32 +151,22 @@ function buildComposerDemoHtml(theme = 'dark') {
       width: 100vw;
       height: 100vh;
       overflow: hidden;
-      background: ${isLight ? '#f8fafc' : '#0e1118'};
-      color: ${isLight ? '#0f172a' : '#e2e8f0'};
+      background: ${isLight ? '#f6f7f9' : '#111215'};
+      color: ${isLight ? '#18191b' : '#e8eaed'};
       font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
-      padding: 20px 28px 26px;
-    }
-    .chat-hint {
-      margin: 0 auto auto;
-      width: min(820px, 100%);
-      padding-top: 8px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      opacity: 0.55;
-      font-size: 12px;
+      padding: 18px 24px 22px;
     }
     .mock-composer {
-      width: min(820px, 100%);
+      width: min(800px, 100%);
       margin: 0 auto;
-      border-radius: 16px;
-      border: 1px solid ${isLight ? 'rgba(100,116,139,0.24)' : 'rgba(148,163,184,0.2)'};
-      background: ${isLight ? '#ffffff' : '#181c26'};
-      box-shadow: ${isLight ? '0 8px 24px rgba(15,23,42,0.06)' : '0 8px 28px rgba(0,0,0,0.36)'};
-      padding: 14px 16px 11px;
+      border-radius: 14px;
+      border: 1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'};
+      background: ${isLight ? '#ffffff' : '#181a1f'};
+      box-shadow: ${isLight ? '0 4px 16px rgba(0,0,0,0.05)' : '0 6px 24px rgba(0,0,0,0.32)'};
+      padding: 13px 15px 10px;
     }
     .mock-composer textarea {
       width: 100%;
@@ -228,10 +218,6 @@ function buildComposerDemoHtml(theme = 'dark') {
   </style>
 </head>
 <body>
-  <div class="chat-hint">
-    <span>Antigravity · AGY HUD (${isLight ? '浅色主题' : '深色主题'} · 输入栏胶囊 + Hover 详情卡)</span>
-    <span>CDP :9229</span>
-  </div>
   <div class="mock-composer">
     <textarea placeholder="Ask anything, @ to mention, / for actions"></textarea>
     <div class="mock-bar">
@@ -380,9 +366,9 @@ async function snap(urlPath, outName, width, height) {
 }
 
 try {
-  await snap('/hud-dark', 'hud-hover-dark.png', 920, 520);
-  await snap('/hud-light', 'hud-hover-light.png', 920, 520);
-  await snap('/panel', 'sidecar-panel.png', 520, 1660);
+  await snap('/hud-dark', 'hud-hover-dark.png', 860, 410);
+  await snap('/hud-light', 'hud-hover-light.png', 860, 410);
+  await snap('/panel', 'sidecar-panel.png', 480, 960);
 } finally {
   server.close();
 }

@@ -39,7 +39,7 @@ test('normalizeConfig preserves custom order, deduplicates, drops unknown IDs, a
       { id: 'context', enabled: true },
     ],
     popoverSections: [
-      { id: 'quotaGroups', enabled: true },
+      { id: 'quotaGroups', enabled: true }, // legacy key should migrate to 'quota'
       { id: 'speedAndCache', enabled: false },
     ],
   });
@@ -62,7 +62,7 @@ test('normalizeConfig preserves custom order, deduplicates, drops unknown IDs, a
   assert.deepEqual(
     normalized.popoverSections.slice(0, 2),
     [
-      { id: 'quotaGroups', enabled: true },
+      { id: 'quota', enabled: true },
       { id: 'speedAndCache', enabled: false },
     ],
   );

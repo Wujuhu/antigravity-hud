@@ -103,6 +103,10 @@ test('assembleHudSnapshot merges breakdown, cache ratios, manual cap override, a
   assert.equal(snap.cache.cumulativeTotalTokens, 320000);
   assert.equal(snap.quota.activeGroupKey, 'argon');
   assert.equal(snap.quota.activeFiveHourPct, 64);
+  assert.equal(snap.quota.groups[1].buckets.length, 1);
+  assert.equal(snap.quota.groups[1].buckets[0].label, '5h');
+  // Single combined context bar exposes window-relative width percentage
+  assert.equal(snap.context.breakdown.find((c) => c.key === 'system').windowPct, 5);
   // Weekly estimate must remain null unless explicitly supplied (on-demand sidecar calculation)
   assert.equal(snap.weeklyEstimate, null);
 });

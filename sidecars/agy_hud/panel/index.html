@@ -11,140 +11,87 @@
     <header class="topbar">
       <div class="brand">
         <span class="brand-dot" id="statusDot"></span>
-        <div>
-          <h1>AGY HUD</h1>
-          <p class="sub" id="statusSub">正在同步遥测状态...</p>
-        </div>
+        <h1>AGY HUD</h1>
+        <span class="meta" id="statusSub">:9229</span>
       </div>
-      <div class="top-actions">
-        <button class="btn btn-ghost" id="btnRefresh" title="立即刷新遥测与配额">刷新</button>
-        <button class="btn btn-ghost" id="btnReset" title="恢复默认显示项与顺序">重置</button>
-      </div>
+      <button class="btn" id="btnRefresh">刷新</button>
     </header>
 
-    <!-- 1. CDP 与启动器 -->
+    <!-- 1. 周额度估算（仅打开本面板时按需计算） -->
     <section class="card">
       <div class="card-head">
-        <h2>CDP 输入栏注入与启动器</h2>
-        <label class="switch">
-          <input type="checkbox" id="chkCdpEnabled" checked />
-          <span class="slider"></span>
-        </label>
+        <h2>周额度估算</h2>
+        <span class="meta" id="weeklySessionsBadge">7d</span>
       </div>
+      <div id="weeklyEstimateBody" class="stack"></div>
+    </section>
 
-      <div class="field-row">
-        <label for="inputPort">CDP 调试端口</label>
-        <div class="port-group">
-          <input id="inputPort" type="number" min="1024" max="65535" value="9229" />
-          <button class="btn btn-primary" id="btnSavePort">应用</button>
+    <!-- 2. CDP 与启动器 -->
+    <section class="card">
+      <div class="card-head">
+        <h2>CDP</h2>
+        <div class="inline-group">
+          <input id="inputPort" type="number" min="1024" max="65535" value="9229" aria-label="CDP Port" />
+          <button class="btn" id="btnSavePort">应用</button>
+          <label class="switch">
+            <input type="checkbox" id="chkCdpEnabled" checked />
+            <span class="slider"></span>
+          </label>
         </div>
       </div>
-
-      <div class="launcher-box">
-        <div class="launcher-actions">
-          <button class="btn btn-accent" id="btnGenerateLauncher">一键生成 CDP 启动器</button>
-          <span class="platform-tag" id="platformTag">--</span>
-        </div>
-        <p class="hint" id="launcherHint">
-          开启 CDP 注入需彻底退出 Antigravity 后，通过带 <code>--remote-debugging-port</code> 参数的启动器重新打开。
-        </p>
-        <div class="launcher-result" id="launcherResult" hidden></div>
+      <div class="launcher-row">
+        <button class="btn btn-solid" id="btnGenerateLauncher">生成启动器</button>
+        <code class="path-chip" id="launcherResult" hidden></code>
       </div>
     </section>
 
-    <!-- 2. 常驻胶囊数据与排序 -->
+    <!-- 3. 更新 -->
     <section class="card">
       <div class="card-head">
-        <h2>输入栏常驻胶囊（勾选显隐 · 拖拽或点箭头排序）</h2>
+        <h2>更新</h2>
+        <span class="meta" id="versionBadge">v1.0.0</span>
+      </div>
+      <div class="inline-row">
+        <input id="inputRepoSlug" type="text" placeholder="owner/agy-hud" aria-label="GitHub Repo" />
+        <button class="btn" id="btnSaveRepo">保存</button>
+        <button class="btn" id="btnCheckUpdate">检查</button>
+        <button class="btn btn-solid" id="btnApplyUpdate" disabled>更新</button>
+      </div>
+      <div class="update-foot">
+        <div class="check-pair">
+          <label class="chk-inline"><input type="checkbox" id="chkAutoCheckUpdate" checked /><span>自动检查</span></label>
+          <label class="chk-inline"><input type="checkbox" id="chkAutoApplyUpdate" /><span>自动更新</span></label>
+        </div>
+        <span class="meta" id="updateStatusText"></span>
+      </div>
+    </section>
+
+    <!-- 4. 自定义 HUD 数据与顺序（放在最后） -->
+    <section class="card">
+      <div class="card-head">
+        <h2>HUD 数据与顺序</h2>
+        <button class="btn btn-ghost" id="btnReset">重置</button>
       </div>
 
-      <div class="field-grid">
-        <div class="field-col">
-          <label for="selectCtxFormat">上下文显示格式</label>
-          <select id="selectCtxFormat">
-            <option value="percent">百分比（如 24%）</option>
-            <option value="tokens">Token 数（如 124k）</option>
-            <option value="both">百分比 + Token（如 24% · 124k）</option>
-          </select>
-        </div>
-        <div class="field-col">
-          <label for="selectWindowCap">上下文窗口上限</label>
-          <select id="selectWindowCap">
-            <option value="auto">自动（优先会话元数据）</option>
-            <option value="256000">256k</option>
-            <option value="512000">512k</option>
-            <option value="1048576">1M</option>
-          </select>
-        </div>
+      <div class="select-row">
+        <select id="selectCtxFormat" aria-label="上下文格式">
+          <option value="percent">上下文: 24%</option>
+          <option value="tokens">上下文: 124k</option>
+          <option value="both">上下文: 24% 124k</option>
+        </select>
+        <select id="selectWindowCap" aria-label="窗口上限">
+          <option value="auto">上限: 自动</option>
+          <option value="256000">上限: 256k</option>
+          <option value="512000">上限: 512k</option>
+          <option value="1048576">上限: 1M</option>
+        </select>
       </div>
 
+      <div class="sub-head">输入栏</div>
       <ul class="sortable-list" id="pillItemsList"></ul>
-    </section>
 
-    <!-- 3. 悬停浮层区块与排序 -->
-    <section class="card">
-      <div class="card-head">
-        <h2>悬停（Hover）详情浮层区块与顺序</h2>
-      </div>
+      <div class="sub-head" style="margin-top:10px">悬浮窗</div>
       <ul class="sortable-list" id="popoverSectionsList"></ul>
-    </section>
-
-    <!-- 4. 版本与自动更新 -->
-    <section class="card">
-      <div class="card-head">
-        <h2>检查与自动更新</h2>
-        <span class="badge" id="versionBadge">v1.0.0</span>
-      </div>
-
-      <div class="field-row">
-        <label for="inputRepoSlug">GitHub 仓库 (owner/repo)</label>
-        <div class="port-group">
-          <input id="inputRepoSlug" type="text" placeholder="username/agy-hud" />
-          <button class="btn btn-primary" id="btnSaveRepo">保存</button>
-        </div>
-      </div>
-
-      <div class="toggle-row">
-        <span>定时自动检查 GitHub 新版本</span>
-        <label class="switch">
-          <input type="checkbox" id="chkAutoCheckUpdate" checked />
-          <span class="slider"></span>
-        </label>
-      </div>
-
-      <div class="toggle-row">
-        <span>发现新版本时自动下载并更新（保留配置）</span>
-        <label class="switch">
-          <input type="checkbox" id="chkAutoApplyUpdate" />
-          <span class="slider"></span>
-        </label>
-      </div>
-
-      <div class="launcher-actions" style="margin-top:8px">
-        <div class="port-group">
-          <button class="btn" id="btnCheckUpdate">检查更新</button>
-          <button class="btn btn-accent" id="btnApplyUpdate" disabled>立即更新</button>
-        </div>
-        <span class="hint" id="updateStatusText" style="margin:0">未检查</span>
-      </div>
-    </section>
-
-    <!-- 5. 周额度总 Token 与费用估算（仅打开本侧边栏时按需计算） -->
-    <section class="card">
-      <div class="card-head">
-        <h2>周额度总 Token 与费用估算</h2>
-        <span class="badge" id="weeklySessionsBadge">按需计算</span>
-      </div>
-      <div id="weeklyEstimateBody" class="snapshot-body">加载中...</div>
-    </section>
-
-    <!-- 6. 实时遥测快照（免 CDP 也可直接查看） -->
-    <section class="card">
-      <div class="card-head">
-        <h2>实时遥测快照</h2>
-        <span class="badge" id="modelBadge">--</span>
-      </div>
-      <div id="liveSnapshotBody" class="snapshot-body">加载中...</div>
     </section>
   </div>
 

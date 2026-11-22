@@ -1,14 +1,12 @@
 /**
  * Self-contained HUD DOM/CSS injection builder for Antigravity composer bar.
  *
- * Renders:
- *   1. Compact pill anchored directly to the left of the permission/mode selector
- *      with user-configurable metrics and custom ordering (`config.pillItems`).
- *   2. Rich hover popover card appearing above the pill with user-configurable
- *      sections and ordering (`config.popoverSections`).
- *
- * Zero external dependencies; safe against XSS via strict HTML escaping;
- * automatic light/dark host theme adaptation and MutationObserver persistence.
+ * Design principles:
+ *   - Restrained Antigravity-native neutral palette (no neon/flashy accents).
+ *   - Zero redundant secondary labels or verbose descriptions.
+ *   - Single combined context bar showing both window occupancy and 5-part breakdown.
+ *   - Unified compact ring gauges for all quota windows (5h, weekly, or any tier-specific
+ *     buckets returned for Free / Pro / Ultra accounts) with zero horizontal quota bars.
  */
 
 export const HUD_ROOT_ID = 'agy-hud-composer-root';
@@ -18,17 +16,16 @@ export const HUD_STYLE_ID = 'agy-hud-injected-style';
 export function buildHudCss() {
   return `
 #${HUD_ROOT_ID} {
-  --hud-bg: rgba(24, 28, 38, 0.72);
-  --hud-bg-hover: rgba(34, 40, 54, 0.92);
-  --hud-border: rgba(148, 163, 184, 0.24);
-  --hud-text: #e2e8f0;
-  --hud-text-muted: #94a3b8;
-  --hud-sep: rgba(148, 163, 184, 0.35);
-  --hud-track: rgba(148, 163, 184, 0.22);
-  --hud-ok: #38bdf8;
-  --hud-good: #34d399;
-  --hud-warn: #f59e0b;
-  --hud-danger: #ef4444;
+  --hud-bg: rgba(255, 255, 255, 0.05);
+  --hud-bg-hover: rgba(255, 255, 255, 0.1);
+  --hud-border: rgba(255, 255, 255, 0.1);
+  --hud-text: #e2e4e9;
+  --hud-muted: #8b909a;
+  --hud-sep: rgba(255, 255, 255, 0.22);
+  --hud-track: rgba(255, 255, 255, 0.14);
+  --hud-accent: #8ab4f8;
+  --hud-warn: #e0a84b;
+  --hud-danger: #e06c75;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -47,25 +44,27 @@ export function buildHudCss() {
   cursor: default;
   user-select: none;
   flex-shrink: 0;
-  transition: background 140ms ease, border-color 140ms ease;
+  transition: background 120ms ease, border-color 120ms ease;
   box-sizing: border-box;
 }
 #${HUD_ROOT_ID}:hover {
   background: var(--hud-bg-hover);
-  border-color: rgba(56, 189, 248, 0.45);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 #${HUD_ROOT_ID}[data-agy-theme="light"] {
-  --hud-bg: rgba(241, 245, 249, 0.88);
-  --hud-bg-hover: rgba(226, 232, 240, 0.96);
-  --hud-border: rgba(100, 116, 139, 0.25);
-  --hud-text: #0f172a;
-  --hud-text-muted: #475569;
-  --hud-sep: rgba(100, 116, 139, 0.35);
-  --hud-track: rgba(100, 116, 139, 0.2);
-  --hud-ok: #0284c7;
-  --hud-good: #059669;
-  --hud-warn: #d97706;
-  --hud-danger: #dc2626;
+  --hud-bg: rgba(0, 0, 0, 0.035);
+  --hud-bg-hover: rgba(0, 0, 0, 0.07);
+  --hud-border: rgba(0, 0, 0, 0.1);
+  --hud-text: #18191b;
+  --hud-muted: #6b707a;
+  --hud-sep: rgba(0, 0, 0, 0.2);
+  --hud-track: rgba(0, 0, 0, 0.12);
+  --hud-accent: #1a73e8;
+  --hud-warn: #b06000;
+  --hud-danger: #c5221f;
+}
+#${HUD_ROOT_ID}[data-agy-theme="light"]:hover {
+  border-color: rgba(0, 0, 0, 0.2);
 }
 #${HUD_ROOT_ID} .agy-hud-seg {
   display: inline-flex;
@@ -77,11 +76,11 @@ export function buildHudCss() {
   font-size: 10px;
 }
 #${HUD_ROOT_ID} .agy-hud-muted {
-  color: var(--hud-text-muted);
+  color: var(--hud-muted);
 }
 #${HUD_ROOT_ID} .agy-hud-ring {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   flex-shrink: 0;
   transform: rotate(-90deg);
 }
@@ -92,28 +91,25 @@ export function buildHudCss() {
 }
 
 #${HUD_POPOVER_ID} {
-  --pop-bg: rgba(17, 21, 30, 0.96);
-  --pop-card: rgba(30, 36, 50, 0.72);
-  --pop-border: rgba(148, 163, 184, 0.22);
-  --pop-divider: rgba(148, 163, 184, 0.14);
-  --pop-text: #f1f5f9;
-  --pop-muted: #94a3b8;
-  --pop-track: rgba(148, 163, 184, 0.18);
-  --pop-ok: #38bdf8;
-  --pop-good: #34d399;
-  --pop-warn: #f59e0b;
-  --pop-danger: #ef4444;
+  --pop-bg: #16181d;
+  --pop-border: rgba(255, 255, 255, 0.1);
+  --pop-divider: rgba(255, 255, 255, 0.07);
+  --pop-text: #e8eaed;
+  --pop-muted: #8b909a;
+  --pop-track: rgba(255, 255, 255, 0.1);
+  --pop-accent: #8ab4f8;
+  --pop-good: #81c995;
+  --pop-warn: #e0a84b;
+  --pop-danger: #e06c75;
   position: fixed;
   z-index: 2147483000;
-  width: 348px;
+  width: 344px;
   max-width: calc(100vw - 24px);
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--pop-bg);
   border: 1px solid var(--pop-border);
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   color: var(--pop-text);
   font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 12px;
@@ -123,7 +119,7 @@ export function buildHudCss() {
   opacity: 0;
   transform: translateY(4px);
   pointer-events: none;
-  transition: opacity 140ms ease, transform 140ms ease;
+  transition: opacity 120ms ease, transform 120ms ease;
 }
 #${HUD_POPOVER_ID}.is-visible {
   opacity: 1;
@@ -131,21 +127,20 @@ export function buildHudCss() {
   pointer-events: auto;
 }
 #${HUD_POPOVER_ID}[data-agy-theme="light"] {
-  --pop-bg: rgba(255, 255, 255, 0.97);
-  --pop-card: rgba(241, 245, 249, 0.9);
-  --pop-border: rgba(100, 116, 139, 0.24);
-  --pop-divider: rgba(100, 116, 139, 0.15);
-  --pop-text: #0f172a;
-  --pop-muted: #475569;
-  --pop-track: rgba(100, 116, 139, 0.16);
-  --pop-ok: #0284c7;
-  --pop-good: #059669;
-  --pop-warn: #d97706;
-  --pop-danger: #dc2626;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.08);
+  --pop-bg: #ffffff;
+  --pop-border: rgba(0, 0, 0, 0.1);
+  --pop-divider: rgba(0, 0, 0, 0.07);
+  --pop-text: #18191b;
+  --pop-muted: #6b707a;
+  --pop-track: rgba(0, 0, 0, 0.09);
+  --pop-accent: #1a73e8;
+  --pop-good: #188038;
+  --pop-warn: #b06000;
+  --pop-danger: #c5221f;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
 }
 #${HUD_POPOVER_ID} .agy-sec {
-  padding: 8px 0;
+  padding: 9px 0;
   border-top: 1px solid var(--pop-divider);
 }
 #${HUD_POPOVER_ID} .agy-sec:first-child {
@@ -162,7 +157,7 @@ export function buildHudCss() {
   gap: 8px;
 }
 #${HUD_POPOVER_ID} .agy-title {
-  font-weight: 600;
+  font-weight: 500;
   font-size: 11.5px;
   color: var(--pop-text);
   overflow: hidden;
@@ -175,82 +170,68 @@ export function buildHudCss() {
 }
 #${HUD_POPOVER_ID} .agy-bar-track {
   width: 100%;
-  height: 6px;
-  margin-top: 6px;
+  height: 5px;
+  margin-top: 7px;
   border-radius: 999px;
   background: var(--pop-track);
   overflow: hidden;
   display: flex;
 }
-#${HUD_POPOVER_ID} .agy-bar-fill {
+#${HUD_POPOVER_ID} .agy-bar-seg {
   height: 100%;
-  transition: width 200ms ease;
+  flex-shrink: 0;
 }
 #${HUD_POPOVER_ID} .agy-legend {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 4px 10px;
   margin-top: 7px;
 }
 #${HUD_POPOVER_ID} .agy-legend-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-  font-size: 11px;
-}
-#${HUD_POPOVER_ID} .agy-legend-left {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
+  font-size: 11px;
   color: var(--pop-muted);
 }
+#${HUD_POPOVER_ID} .agy-legend-item strong {
+  color: var(--pop-text);
+  font-weight: 500;
+}
 #${HUD_POPOVER_ID} .agy-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
 }
-#${HUD_POPOVER_ID} .agy-two-col {
+#${HUD_POPOVER_ID} .agy-metrics-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-#${HUD_POPOVER_ID} .agy-metric-box {
-  background: var(--pop-card);
-  border-radius: 8px;
-  padding: 7px 9px;
-}
-#${HUD_POPOVER_ID} .agy-metric-head {
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--pop-muted);
-  margin-bottom: 4px;
+  gap: 4px 16px;
 }
 #${HUD_POPOVER_ID} .agy-kv {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   font-size: 11px;
-  margin-top: 2px;
 }
-#${HUD_POPOVER_ID} .agy-kv span:first-child {
+#${HUD_POPOVER_ID} .agy-kv span {
   color: var(--pop-muted);
 }
 #${HUD_POPOVER_ID} .agy-kv strong {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--pop-text);
 }
 #${HUD_POPOVER_ID} .agy-quota-list {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin-top: 6px;
+  gap: 6px;
 }
 #${HUD_POPOVER_ID} .agy-quota-row {
-  display: grid;
-  grid-template-columns: 82px 1fr 94px;
+  display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 10px;
   font-size: 11px;
 }
 #${HUD_POPOVER_ID} .agy-quota-name {
@@ -258,26 +239,31 @@ export function buildHudCss() {
   align-items: center;
   gap: 5px;
   font-weight: 500;
+  color: var(--pop-text);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-#${HUD_POPOVER_ID} .agy-quota-5h {
-  display: flex;
+#${HUD_POPOVER_ID} .agy-quota-buckets {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
-#${HUD_POPOVER_ID} .agy-mini-bar {
-  flex: 1;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--pop-track);
-  overflow: hidden;
-}
-#${HUD_POPOVER_ID} .agy-quota-week {
-  text-align: right;
-  color: var(--pop-muted);
+#${HUD_POPOVER_ID} .agy-q-bucket {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 82px;
   white-space: nowrap;
+}
+#${HUD_POPOVER_ID} .agy-q-bucket:first-child {
+  min-width: 98px;
+}
+#${HUD_POPOVER_ID} .agy-q-ring {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  transform: rotate(-90deg);
 }
 `;
 }
@@ -349,19 +335,31 @@ export function buildHudInjectExpression(snapshot, config) {
     }
 
     function ctxColor(pct) {
-      if (pct >= 85) return 'var(--hud-danger, #ef4444)';
-      if (pct >= 60) return 'var(--hud-warn, #f59e0b)';
-      return 'var(--hud-ok, #38bdf8)';
+      if (pct >= 85) return 'var(--hud-danger)';
+      if (pct >= 65) return 'var(--hud-warn)';
+      return 'var(--hud-accent)';
     }
 
-    function quotaColor(pct) {
-      if (pct == null) return 'var(--pop-muted, #94a3b8)';
-      if (pct <= 15) return 'var(--pop-danger, #ef4444)';
-      if (pct <= 35) return 'var(--pop-warn, #f59e0b)';
-      return 'var(--pop-good, #34d399)';
+    function quotaRingColor(pct) {
+      if (pct == null) return 'var(--pop-muted)';
+      if (pct <= 15) return 'var(--pop-danger)';
+      if (pct <= 35) return 'var(--pop-warn)';
+      return 'var(--pop-good)';
     }
 
-    // Ensure style tag exists once
+    function makeRingSvg(cls, pct, strokeColor, trackVar) {
+      var r = 5.2;
+      var circ = 2 * Math.PI * r;
+      var clamped = Math.max(0, Math.min(100, Number(pct || 0)));
+      var dash = (clamped / 100) * circ;
+      return (
+        '<svg class="' + cls + '" viewBox="0 0 14 14" aria-hidden="true">' +
+          '<circle cx="7" cy="7" r="' + r + '" fill="none" stroke="' + trackVar + '" stroke-width="1.8"></circle>' +
+          '<circle cx="7" cy="7" r="' + r + '" fill="none" stroke="' + strokeColor + '" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="' + dash.toFixed(1) + ' ' + circ.toFixed(1) + '"></circle>' +
+        '</svg>'
+      );
+    }
+
     var styleEl = document.getElementById(IDS.style);
     if (!styleEl) {
       styleEl = document.createElement('style');
@@ -452,10 +450,6 @@ export function buildHudInjectExpression(snapshot, config) {
       var mdl = snap.model || {};
       var pct = Number(ctx.usedPercent || 0);
       var pctRound = Math.round(pct);
-      var r = 5.5;
-      var circ = 2 * Math.PI * r;
-      var dash = Math.max(0, Math.min(circ, (pct / 100) * circ));
-      var ringColor = ctxColor(pct);
       var fmt = cfg.contextDisplayFormat || 'percent';
 
       var ordered = Array.isArray(cfg.pillItems) ? cfg.pillItems : [];
@@ -465,7 +459,6 @@ export function buildHudInjectExpression(snapshot, config) {
       }
       if (activeIds.length === 0) activeIds = ['context'];
 
-      // Compact fallback on narrow composer widths
       var maxCount = cardWidth < 420 ? 2 : cardWidth < 540 ? 3 : activeIds.length;
       var segments = [];
 
@@ -475,28 +468,26 @@ export function buildHudInjectExpression(snapshot, config) {
           var ctxText = fmt === 'tokens'
             ? fmtTok(ctx.usedTokens)
             : fmt === 'both'
-              ? pctRound + '% · ' + fmtTok(ctx.usedTokens)
+              ? pctRound + '% ' + fmtTok(ctx.usedTokens)
               : pctRound + '%';
           segments.push(
             '<span class="agy-hud-seg">' +
-              '<svg class="agy-hud-ring" viewBox="0 0 14 14" aria-hidden="true">' +
-                '<circle cx="7" cy="7" r="' + r + '" fill="none" stroke="var(--hud-track)" stroke-width="2"></circle>' +
-                '<circle cx="7" cy="7" r="' + r + '" fill="none" stroke="' + ringColor + '" stroke-width="2" stroke-linecap="round" stroke-dasharray="' + dash.toFixed(1) + ' ' + circ.toFixed(1) + '"></circle>' +
-              '</svg>' +
+              makeRingSvg('agy-hud-ring', pct, ctxColor(pct), 'var(--hud-track)') +
               '<span>' + esc(ctxText) + '</span>' +
             '</span>'
           );
         } else if (id === 'speed') {
-          var sVal = spd.latestTokPerSec != null ? Math.round(spd.latestTokPerSec) + ' tok/s' : '-- tok/s';
+          var sVal = spd.latestTokPerSec != null ? Math.round(spd.latestTokPerSec) + ' tok/s' : '--';
           segments.push('<span class="agy-hud-seg' + (spd.latestTokPerSec == null ? ' agy-hud-muted' : '') + '">' + esc(sVal) + '</span>');
         } else if (id === 'quota') {
           if (qta.available && qta.activeFiveHourPct != null) {
             var qColor = qta.activeFiveHourPct <= 15 ? 'var(--hud-danger)' : qta.activeFiveHourPct <= 35 ? 'var(--hud-warn)' : 'var(--hud-text)';
-            segments.push('<span class="agy-hud-seg" style="color:' + qColor + '">Q ' + esc(qta.activeFiveHourPct) + '%</span>');
+            var qLbl = qta.primaryBucketLabel || '5h';
+            segments.push('<span class="agy-hud-seg" style="color:' + qColor + '"><span class="agy-hud-muted">' + esc(qLbl) + '</span> ' + esc(qta.activeFiveHourPct) + '%</span>');
           }
         } else if (id === 'cache') {
           if (cac.lastHitPct != null) {
-            segments.push('<span class="agy-hud-seg">C ' + esc(Math.round(cac.lastHitPct)) + '%</span>');
+            segments.push('<span class="agy-hud-seg"><span class="agy-hud-muted">缓存</span> ' + esc(Math.round(cac.lastHitPct)) + '%</span>');
           }
         } else if (id === 'tokens') {
           segments.push('<span class="agy-hud-seg">' + esc(fmtTok(cac.cumulativeTotalTokens)) + '</span>');
@@ -526,42 +517,33 @@ export function buildHudInjectExpression(snapshot, config) {
         var sec = sections[i];
         if (!sec || !sec.enabled) continue;
 
-        if (sec.id === 'contextOverview') {
+        if (sec.id === 'context') {
           var pct = Number(ctx.usedPercent || 0);
-          var fillColor = pct >= 85 ? 'var(--pop-danger)' : pct >= 60 ? 'var(--pop-warn)' : 'var(--pop-ok)';
-          var srcTag = ctx.limitSource === 'manual' ? '手动上限' : ctx.limitSource === 'antigravity' ? '会话上限' : '默认上限';
-          blocks.push(
-            '<div class="agy-sec">' +
-              '<div class="agy-row">' +
-                '<span class="agy-title">' + esc(mdl.id || mdl.label || '当前会话') + '</span>' +
-                '<span class="agy-muted" title="' + esc(srcTag) + '">' + esc(fmtTok(ctx.usedTokens)) + ' / ' + esc(fmtTok(ctx.contextLimit)) + ' (' + esc(pct.toFixed(1)) + '%)</span>' +
-              '</div>' +
-              '<div class="agy-bar-track">' +
-                '<div class="agy-bar-fill" style="width:' + Math.min(100, Math.max(0, pct)) + '%;background:' + fillColor + '"></div>' +
-              '</div>' +
-            '</div>'
-          );
-        } else if (sec.id === 'contextBreakdown') {
           var list = Array.isArray(ctx.breakdown) ? ctx.breakdown : [];
           var segs = '';
           var legends = '';
           for (var b = 0; b < list.length; b++) {
             var item = list[b];
-            var w = Math.max(0, Math.min(100, Number(item.pct || 0)));
-            if (w > 0) {
-              segs += '<div class="agy-bar-fill" style="width:' + w + '%;background:' + esc(item.color) + '" title="' + esc(item.label + ': ' + fmtTok(item.tokens)) + '"></div>';
+            var wp = Number(item.windowPct != null ? item.windowPct : (pct * Number(item.pct || 0) / 100));
+            if (wp > 0) {
+              segs += '<div class="agy-bar-seg" style="width:' + Math.min(100, wp).toFixed(2) + '%;background:' + esc(item.color) + '" title="' + esc(item.label + ' ' + fmtTok(item.tokens)) + '"></div>';
             }
-            legends +=
-              '<div class="agy-legend-item">' +
-                '<span class="agy-legend-left"><span class="agy-dot" style="background:' + esc(item.color) + '"></span>' + esc(item.label) + '</span>' +
-                '<span>' + esc(fmtTok(item.tokens)) + ' <span class="agy-muted">(' + esc(Math.round(w)) + '%)</span></span>' +
-              '</div>';
+            if (Number(item.tokens || 0) > 0) {
+              legends +=
+                '<span class="agy-legend-item">' +
+                  '<span class="agy-dot" style="background:' + esc(item.color) + '"></span>' +
+                  esc(item.label) + ' <strong>' + esc(fmtTok(item.tokens)) + '</strong>' +
+                '</span>';
+            }
           }
           blocks.push(
             '<div class="agy-sec">' +
-              '<div class="agy-row"><span class="agy-title">上下文构成</span><span class="agy-muted">剩余 ' + esc(fmtTok(ctx.freeTokens)) + '</span></div>' +
+              '<div class="agy-row">' +
+                '<span class="agy-title">' + esc(mdl.id || mdl.label || '上下文') + '</span>' +
+                '<span class="agy-muted">' + esc(fmtTok(ctx.usedTokens)) + ' / ' + esc(fmtTok(ctx.contextLimit)) + ' · ' + esc(pct.toFixed(1)) + '%</span>' +
+              '</div>' +
               '<div class="agy-bar-track">' + segs + '</div>' +
-              '<div class="agy-legend">' + legends + '</div>' +
+              (legends ? '<div class="agy-legend">' + legends + '</div>' : '') +
             '</div>'
           );
         } else if (sec.id === 'speedAndCache') {
@@ -571,54 +553,53 @@ export function buildHudInjectExpression(snapshot, config) {
           var totalHit = cac.sessionHitPct != null ? cac.sessionHitPct.toFixed(1) + '%' : '--';
           blocks.push(
             '<div class="agy-sec">' +
-              '<div class="agy-two-col">' +
-                '<div class="agy-metric-box">' +
-                  '<div class="agy-metric-head">速率与输出</div>' +
-                  '<div class="agy-kv"><span>本轮速率</span><strong>' + esc(curSpeed) + '</strong></div>' +
-                  '<div class="agy-kv"><span>会话均值</span><strong>' + esc(avgSpeed) + '</strong></div>' +
-                  '<div class="agy-kv"><span>本轮输出</span><strong>' + esc(fmtTok(spd.lastOutputTokens)) + '</strong></div>' +
-                '</div>' +
-                '<div class="agy-metric-box">' +
-                  '<div class="agy-metric-head">Prompt 缓存</div>' +
-                  '<div class="agy-kv"><span>本轮命中</span><strong>' + esc(lastHit) + '</strong></div>' +
-                  '<div class="agy-kv"><span>累计命中</span><strong>' + esc(totalHit) + '</strong></div>' +
-                  '<div class="agy-kv"><span>会话总计</span><strong>' + esc(fmtTok(cac.cumulativeTotalTokens)) + '</strong></div>' +
-                '</div>' +
+              '<div class="agy-metrics-grid">' +
+                '<div class="agy-kv"><span>本轮速率</span><strong>' + esc(curSpeed) + '</strong></div>' +
+                '<div class="agy-kv"><span>本轮缓存</span><strong>' + esc(lastHit) + '</strong></div>' +
+                '<div class="agy-kv"><span>会话均值</span><strong>' + esc(avgSpeed) + '</strong></div>' +
+                '<div class="agy-kv"><span>总缓存</span><strong>' + esc(totalHit) + '</strong></div>' +
+                '<div class="agy-kv"><span>本轮输出</span><strong>' + esc(fmtTok(spd.lastOutputTokens)) + '</strong></div>' +
+                '<div class="agy-kv"><span>会话总计</span><strong>' + esc(fmtTok(cac.cumulativeTotalTokens)) + '</strong></div>' +
               '</div>' +
             '</div>'
           );
-        } else if (sec.id === 'quotaGroups') {
+        } else if (sec.id === 'quota') {
           var groups = Array.isArray(qta.groups) ? qta.groups : [];
           var qRows = '';
           if (qta.available && groups.length > 0) {
             for (var g = 0; g < groups.length; g++) {
               var grp = groups[g];
-              var fh = grp.fiveHour;
-              var wk = grp.weekly;
-              var fhPct = fh && fh.remainingPct != null ? fh.remainingPct : null;
-              var fhDur = fh && !fh.isFull && fh.remainingMs ? fmtDur(fh.remainingMs) : '';
-              var wkPct = wk && wk.remainingPct != null ? wk.remainingPct : null;
-              var wkDur = wk && !wk.isFull && wk.remainingMs ? fmtDur(wk.remainingMs) : '';
+              var buckets = Array.isArray(grp.buckets) && grp.buckets.length > 0
+                ? grp.buckets
+                : [grp.fiveHour, grp.weekly].filter(Boolean);
+              var bucketHtml = '';
+              for (var bi = 0; bi < buckets.length; bi++) {
+                var bk = buckets[bi];
+                var bPct = bk && bk.remainingPct != null ? bk.remainingPct : null;
+                var bDur = bk && !bk.isFull && bk.remainingMs ? fmtDur(bk.remainingMs) : '';
+                var bLbl = bk.label || (bk.window === 'weekly' ? '周' : bk.window === '5h' ? '5h' : '');
+                bucketHtml +=
+                  '<span class="agy-q-bucket">' +
+                    makeRingSvg('agy-q-ring', bPct != null ? bPct : 0, quotaRingColor(bPct), 'var(--pop-track)') +
+                    '<span class="agy-muted">' + esc(bLbl) + '</span>' +
+                    '<span>' + (bPct != null ? esc(bPct) + '%' : '--') + '</span>' +
+                    (bDur ? '<span class="agy-muted">' + esc(bDur) + '</span>' : '') +
+                  '</span>';
+              }
               var activeDot = grp.isActive
-                ? '<span class="agy-dot" style="background:var(--pop-ok)"></span>'
+                ? '<span class="agy-dot" style="background:var(--pop-accent)"></span>'
                 : '<span class="agy-dot" style="background:var(--pop-track)"></span>';
-              var barColor = quotaColor(fhPct);
               qRows +=
                 '<div class="agy-quota-row">' +
                   '<span class="agy-quota-name">' + activeDot + esc(grp.label) + '</span>' +
-                  '<span class="agy-quota-5h">' +
-                    '<span class="agy-mini-bar"><span class="agy-bar-fill" style="display:block;width:' + (fhPct != null ? fhPct : 0) + '%;background:' + barColor + '"></span></span>' +
-                    '<span>' + (fhPct != null ? esc(fhPct) + '%' : '--') + (fhDur ? ' <span class="agy-muted">(' + esc(fhDur) + ')</span>' : '') + '</span>' +
-                  '</span>' +
-                  '<span class="agy-quota-week">周 ' + (wkPct != null ? esc(wkPct) + '%' : '--') + (wkDur ? ' ' + esc(wkDur) : '') + '</span>' +
+                  '<span class="agy-quota-buckets">' + bucketHtml + '</span>' +
                 '</div>';
             }
           } else {
-            qRows = '<div class="agy-muted" style="margin-top:4px">原生配额数据暂不可用（请确认已在 Antigravity 内启用本插件）</div>';
+            qRows = '<div class="agy-muted">额度暂不可用</div>';
           }
           blocks.push(
             '<div class="agy-sec">' +
-              '<div class="agy-row"><span class="agy-title">账号剩余额度</span><span class="agy-muted">' + (qta.stale ? '缓存兜底' : '5h / 周') + '</span></div>' +
               '<div class="agy-quota-list">' + qRows + '</div>' +
             '</div>'
           );
@@ -626,18 +607,17 @@ export function buildHudInjectExpression(snapshot, config) {
       }
 
       if (blocks.length === 0) {
-        blocks.push('<div class="agy-sec agy-muted">暂无开启的浮层区块，请在右侧 AGY HUD 设置页勾选。</div>');
+        blocks.push('<div class="agy-sec agy-muted">无显示区块</div>');
       }
       return blocks.join('');
     }
 
     function positionPopover(pillEl, popEl) {
       var pr = pillEl.getBoundingClientRect();
-      var pw = popEl.offsetWidth || 348;
-      var ph = popEl.offsetHeight || 280;
+      var pw = popEl.offsetWidth || 344;
+      var ph = popEl.offsetHeight || 220;
       var left = pr.left + pr.width / 2 - pw / 2;
       left = Math.max(12, Math.min(window.innerWidth - pw - 12, left));
-      // Anchor slightly above the composer box top if reachable so the card never covers the textarea
       var composerCard = pillEl.closest ? pillEl.closest('form, [class*="composer"], [class*="input"], .mock-composer') : null;
       var anchorTop = pr.top;
       if (composerCard) {
@@ -716,7 +696,7 @@ export function buildHudInjectExpression(snapshot, config) {
         pillEl = document.createElement('div');
         pillEl.id = IDS.root;
         pillEl.setAttribute('role', 'status');
-        pillEl.setAttribute('aria-label', 'AGY HUD Telemetry');
+        pillEl.setAttribute('aria-label', 'AGY HUD');
       }
       if (pillEl.parentElement !== anchor.parent || pillEl.nextSibling !== anchor.before) {
         anchor.parent.insertBefore(pillEl, anchor.before);

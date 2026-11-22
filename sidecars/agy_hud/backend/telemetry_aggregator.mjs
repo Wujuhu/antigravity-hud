@@ -33,9 +33,10 @@ export function matchModelToQuotaGroupKey(modelId = '') {
 }
 
 /**
- * Collapse fine-grained analyzer buckets into 5 clean UI breakdown categories.
+ * Collapse fine-grained analyzer buckets into 5 clean UI breakdown categories
+ * using restrained, low-saturation Antigravity-native tones.
  */
-export function buildBreakdownCategories(categories = {}, totalUsed = 0) {
+export function buildBreakdownCategories(categories = {}, totalUsed = 0, contextLimit = 0) {
   const systemBase =
     (categories.systemPrompt || 0) +
     (categories.systemTools || 0) +
@@ -57,23 +58,81 @@ export function buildBreakdownCategories(categories = {}, totalUsed = 0) {
 
   const thinking = categories.agentThinking || 0;
 
+  // Muted Google / Antigravity-inspired palette
   const items = [
-    { key: 'system', label: '系统底座', tokens: systemBase, color: '#38bdf8' },
-    { key: 'rules', label: '规则/技能', tokens: rulesAndSkills, color: '#a78bfa' },
-    { key: 'history', label: '对话历史', tokens: conversationHistory, color: '#34d399' },
-    { key: 'tools', label: '工具输出', tokens: toolOutputs, color: '#fbbf24' },
-    { key: 'thinking', label: '思考过程', tokens: thinking, color: '#f472b6' },
+    { key: 'system', label: '系统', tokens: systemBase, color: '#6e9be8' },
+    { key: 'rules', label: '规则', tokens: rulesAndSkills, color: '#9b87d6' },
+    { key: 'history', label: '对话', tokens: conversationHistory, color: '#5fb49c' },
+    { key: 'tools', label: '工具', tokens: toolOutputs, color: '#d4a359' },
+    { key: 'thinking', label: '思考', tokens: thinking, color: '#c87d99' },
   ];
 
-  const denom = Math.max(
+  const usedDenom = Math.max(
     1,
     totalUsed || items.reduce((sum, item) => sum + item.tokens, 0),
   );
+  const capDenom = contextLimit > 0 ? contextLimit : usedDenom;
 
   return items.map((item) => ({
     ...item,
-    pct: Math.round((item.tokens / denom) * 1000) / 10,
+    pct: Math.round((item.tokens / usedDenom) * 1000) / 10,
+    windowPct: Math.min(100, Math.round((item.tokens / capDenom) * 1000) / 10),
   }));
+}
+
+function formatBucketLabel(b) {
+  if (!b) return '';
+  if (b.window === '5h') return '5h';
+  if (b.window === 'weekly') return '周';
+  const raw = String(b.rawWindow || b.displayName || b.window || '').trim();
+  if (/day|24h|daily/i.test(raw)) return '日';
+  if (/month|30d/i.test(raw)) return '月';
+  return raw ? raw.slice(0, 6) : '额度';
+}
+
+function normalizeGroupBuckets(g) {
+  const out = [];
+  const rawBuckets = Array.isArray(g.buckets) && g.buckets.length > 0 ? g.buckets : null;
+
+  if (rawBuckets) {
+    for (const b of rawBuckets) {
+      if (!b || b.disabled) continue;
+      out.push({
+        window: b.window || 'other',
+        label: formatBucketLabel(b),
+        remainingPct: b.remainingPct ?? null,
+        remainingMs: b.remainingMs ?? null,
+        resetTime: b.resetTime || '',
+        isFull: Boolean(b.isFull),
+      });
+    }
+  } else {
+    if (g.fiveHour) {
+      out.push({
+        window: '5h',
+        label: '5h',
+        remainingPct: g.fiveHour.remainingPct ?? null,
+        remainingMs: g.fiveHour.remainingMs ?? null,
+        resetTime: g.fiveHour.resetTime || '',
+        isFull: Boolean(g.fiveHour.isFull),
+      });
+    }
+    if (g.weekly) {
+      out.push({
+        window: 'weekly',
+        label: '周',
+        remainingPct: g.weekly.remainingPct ?? null,
+        remainingMs: g.weekly.remainingMs ?? null,
+        resetTime: g.weekly.resetTime || '',
+        isFull: Boolean(g.weekly.isFull),
+      });
+    }
+  }
+
+  // Sort consistently: 5h -> daily -> weekly -> other
+  const order = { '5h': 0, daily: 1, weekly: 2, other: 3 };
+  out.sort((a, b) => (order[a.window] ?? 3) - (order[b.window] ?? 3));
+  return out;
 }
 
 /**
@@ -89,7 +148,6 @@ export function assembleHudSnapshot({
 } = {}) {
   const hasContext = Boolean(contextSnap && contextSnap.found);
 
-  // Determine effective context window limit
   let contextLimit = hasContext ? Number(contextSnap.contextLimit || 0) : 0;
   let limitSource = hasContext ? contextSnap.limitSource || 'antigravity' : 'default';
 
@@ -117,7 +175,7 @@ export function assembleHudSnapshot({
     '';
   const modelLabel = contextSnap?.model?.label || modelId || '待会话开始';
 
-  const breakdown = buildBreakdownCategories(contextSnap?.categories || {}, usedTokens);
+  const breakdown = buildBreakdownCategories(contextSnap?.categories || {}, usedTokens, contextLimit);
 
   const cache = contextSnap?.cache || {};
   const cumulativeTotalTokens =
@@ -130,27 +188,29 @@ export function assembleHudSnapshot({
     groups[0] ||
     null;
 
-  const normalizedQuotaGroups = groups.map((g) => ({
-    key: g.key,
-    label: g.label,
-    isActive: activeGroup ? g.key === activeGroup.key : false,
-    fiveHour: g.fiveHour
-      ? {
-          remainingPct: g.fiveHour.remainingPct,
-          remainingMs: g.fiveHour.remainingMs,
-          resetTime: g.fiveHour.resetTime,
-          isFull: Boolean(g.fiveHour.isFull),
-        }
-      : null,
-    weekly: g.weekly
-      ? {
-          remainingPct: g.weekly.remainingPct,
-          remainingMs: g.weekly.remainingMs,
-          resetTime: g.weekly.resetTime,
-          isFull: Boolean(g.weekly.isFull),
-        }
-      : null,
-  }));
+  const normalizedQuotaGroups = groups.map((g) => {
+    const buckets = normalizeGroupBuckets(g);
+    const fh = buckets.find((b) => b.window === '5h') || null;
+    const wk = buckets.find((b) => b.window === 'weekly') || null;
+    return {
+      key: g.key,
+      label: g.label,
+      isActive: activeGroup ? g.key === activeGroup.key : false,
+      fiveHour: fh,
+      weekly: wk,
+      buckets,
+    };
+  });
+
+  const activeNormalized =
+    normalizedQuotaGroups.find((g) => g.isActive) ||
+    normalizedQuotaGroups[0] ||
+    null;
+  // Pick primary bucket for pill display (prefer 5h, else first available bucket for Pro/Free tiers)
+  const primaryBucket =
+    activeNormalized?.fiveHour ||
+    activeNormalized?.buckets?.[0] ||
+    null;
 
   const weeklyEstimate = weeklyUsage
     ? buildWeeklyQuotaEstimates(weeklyUsage, normalizedQuotaGroups)
@@ -194,15 +254,16 @@ export function assembleHudSnapshot({
     },
     quota: {
       ok: Boolean(quotaSummary?.ok),
-      available: Boolean(quotaSummary?.available && groups.length > 0),
+      available: Boolean(quotaSummary?.available && normalizedQuotaGroups.length > 0),
       stale: Boolean(quotaSummary?.stale),
       fetchedAtMs: quotaSummary?.fetchedAtMs || null,
       error: quotaSummary?.error || '',
-      activeGroupKey: activeGroup?.key || activeGroupKey,
-      activeGroupLabel: activeGroup?.label || '',
-      activeFiveHourPct: activeGroup?.fiveHour?.remainingPct ?? null,
-      activeFiveHourRemainingMs: activeGroup?.fiveHour?.remainingMs ?? null,
-      activeWeeklyPct: activeGroup?.weekly?.remainingPct ?? null,
+      activeGroupKey: activeNormalized?.key || activeGroupKey,
+      activeGroupLabel: activeNormalized?.label || '',
+      primaryBucketLabel: primaryBucket?.label || '',
+      activeFiveHourPct: primaryBucket?.remainingPct ?? null,
+      activeFiveHourRemainingMs: primaryBucket?.remainingMs ?? null,
+      activeWeeklyPct: activeNormalized?.weekly?.remainingPct ?? null,
       groups: normalizedQuotaGroups,
     },
     weeklyEstimate,
