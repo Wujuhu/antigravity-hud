@@ -8,11 +8,13 @@
 
 1. **确认清理范围（若用户未明确说明）**
    - **常规卸载（默认）**：仅移除插件目录 `~/.gemini/config/plugins/agy-hud`，保留个人配置（方便日后重装）。
-   - **彻底卸载**：同时移除用户数据目录 `~/.gemini/antigravity/plugin_data/agy-hud` 与生成的启动器（Windows 桌面 `Antigravity (HUD).lnk` 或 macOS `~/Applications/Antigravity (HUD).app`）。
+   - **彻底卸载**：同时移除用户数据目录 `~/.gemini/antigravity/plugin_data/agy-hud` 与生成的启动器：
+     - **Windows**：桌面 `Antigravity (HUD).lnk`（及旧名 `Antigravity (CDP).lnk`）
+     - **macOS**：`/Applications/Antigravity (HUD).app`（及旧路径 `~/Applications/Antigravity (HUD).app`、`Antigravity (CDP).app`）与桌面快捷方式 `~/Desktop/Antigravity (HUD).app`
 
 2. **执行卸载**
    - 若本地存在安装包目录，可运行 `node scripts/uninstall.mjs`（彻底清理加 `--purge-data`）。
-   - 若已删除安装包目录，直接按上述路径安全删除对应目录与启动器文件即可（若存在旧名 `Antigravity (CDP).lnk` / `Antigravity (CDP).app` 也一并清理）。
+   - 若已删除安装包目录，直接按上述路径安全删除对应目录与启动器文件即可。
    - **严禁**修改 Antigravity 安装目录、`app.asar` 或手动编辑 `~/.gemini/config/config.json`。
 
 3. **向用户反馈卸载结果**

@@ -808,18 +808,43 @@ export function buildHudInjectExpression(snapshot, config) {
     }
 
     function bindHoverEvents(pillEl, popEl) {
-      // Always replace click handler on popEl so hot-reloaded updates take effect immediately
-      popEl.onclick = function(ev) {
+      function runOpenSidecarFlow(ev) {
         var link = ev.target && ev.target.closest ? ev.target.closest('[data-agy-action="open-sidecar"]') : null;
         if (!link) return;
+        if (ev.type === 'pointerdown' && typeof ev.button === 'number' && ev.button !== 0) return;
         ev.preventDefault();
         ev.stopPropagation();
+
+        // Deduplicate pointerdown + click firing for the same physical click
+        var now = Date.now();
+        if (window.__agyHudOpenSidecarAt && now - window.__agyHudOpenSidecarAt < 350) return;
+        window.__agyHudOpenSidecarAt = now;
+
         popEl.classList.remove('is-visible');
+
+        var runSeq = (window.__agyHudOpenSidecarSeq || 0) + 1;
+        window.__agyHudOpenSidecarSeq = runSeq;
 
         function isVisible(el) {
           if (!el || !el.getBoundingClientRect) return false;
           var r = el.getBoundingClientRect();
           return r.width > 0 && r.height > 0;
+        }
+
+        function waitFor(probeFn, onFound, timeoutMs) {
+          var deadline = Date.now() + (timeoutMs || 2000);
+          function tick() {
+            if (window.__agyHudOpenSidecarSeq !== runSeq) return;
+            var res = null;
+            try { res = probeFn(); } catch (e) { res = null; }
+            if (res) {
+              onFound(res);
+              return;
+            }
+            if (Date.now() >= deadline) return;
+            setTimeout(tick, 50);
+          }
+          tick();
         }
 
         function findVisibleAgyHudItem() {
@@ -837,33 +862,54 @@ export function buildHudInjectExpression(snapshot, config) {
           return null;
         }
 
-        function clickAgyHudFromPluginsCard() {
-          var direct = findVisibleAgyHudItem();
-          if (direct) {
-            direct.click();
-            return true;
-          }
-          var extCard = document.querySelector('[data-testid="new-tab-card-extensions"]');
-          if (extCard && isVisible(extCard)) {
-            extCard.click();
-            setTimeout(function() {
-              var item = findVisibleAgyHudItem();
-              if (item) item.click();
-            }, 150);
-            return true;
-          }
-          return false;
+        function openFromPluginsOrDirect(timeoutMs) {
+          waitFor(function() {
+            var direct = findVisibleAgyHudItem();
+            if (direct) return { kind: 'direct', el: direct };
+            var extCard = document.querySelector('[data-testid="new-tab-card-extensions"]');
+            if (extCard && isVisible(extCard)) return { kind: 'ext', el: extCard };
+            return null;
+          }, function(found) {
+            found.el.click();
+            if (found.kind === 'ext') {
+              waitFor(findVisibleAgyHudItem, function(item) {
+                item.click();
+              }, 1800);
+            }
+          }, timeoutMs || 1800);
         }
 
-        function trySelectOrAddAgyHudTab() {
-          if (clickAgyHudFromPluginsCard()) return true;
-          var plusBtn = document.querySelector('[data-testid="side-panel-new-tab-button"]');
-          if (!plusBtn || !isVisible(plusBtn)) return false;
-          plusBtn.click();
-          setTimeout(function() {
-            clickAgyHudFromPluginsCard();
-          }, 160);
-          return true;
+        function selectOrCreateAgyHudTab(waitForExpandedBtn) {
+          waitFor(function() {
+            if (waitForExpandedBtn && waitForExpandedBtn.getAttribute('aria-expanded') !== 'true') {
+              return null;
+            }
+            var direct = findVisibleAgyHudItem();
+            if (direct) return { kind: 'direct', el: direct };
+            var extCard = document.querySelector('[data-testid="new-tab-card-extensions"]');
+            if (extCard && isVisible(extCard)) return { kind: 'ext', el: extCard };
+            var plusBtn = document.querySelector('[data-testid="side-panel-new-tab-button"]');
+            if (plusBtn && isVisible(plusBtn)) return { kind: 'plus', el: plusBtn };
+            return null;
+          }, function(found) {
+            if (found.kind === 'direct') {
+              found.el.click();
+              return;
+            }
+            if (found.kind === 'ext') {
+              found.el.click();
+              waitFor(findVisibleAgyHudItem, function(item) {
+                item.click();
+              }, 1800);
+              return;
+            }
+            if (found.kind === 'plus') {
+              found.el.click();
+              setTimeout(function() {
+                openFromPluginsOrDirect(1800);
+              }, 60);
+            }
+          }, 2200);
         }
 
         var toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
@@ -872,13 +918,18 @@ export function buildHudInjectExpression(snapshot, config) {
         if (!isExpanded && toggleBtn && isVisible(toggleBtn)) {
           toggleBtn.click();
           setTimeout(function() {
-            trySelectOrAddAgyHudTab();
-          }, 180);
+            selectOrCreateAgyHudTab(toggleBtn);
+          }, 40);
           return;
         }
 
-        trySelectOrAddAgyHudTab();
-      };
+        selectOrCreateAgyHudTab(null);
+      }
+
+      // Always replace handlers on popEl so hot-reloaded updates take effect immediately;
+      // binding both pointerdown and click prevents lost clicks during DOM updates.
+      popEl.onpointerdown = runOpenSidecarFlow;
+      popEl.onclick = runOpenSidecarFlow;
 
       if (pillEl.__agyHudBound) return;
       pillEl.__agyHudBound = true;
@@ -1181,8 +1232,16 @@ export function buildHudInjectExpression(snapshot, config) {
       popEl.setAttribute('data-agy-theme', theme);
       window.__agyHudHoverDelayMs = Number(cfg.hoverDelayMs ?? 150);
 
-      pillEl.innerHTML = renderPillHtml(anchor.cardWidth);
-      popEl.innerHTML = renderPopoverHtml();
+      var nextPillHtml = renderPillHtml(anchor.cardWidth);
+      if (pillEl.getAttribute('data-agy-pill-html') !== nextPillHtml) {
+        pillEl.setAttribute('data-agy-pill-html', nextPillHtml);
+        pillEl.innerHTML = nextPillHtml;
+      }
+      var nextPopHtml = renderPopoverHtml();
+      if (popEl.getAttribute('data-agy-pop-html') !== nextPopHtml) {
+        popEl.setAttribute('data-agy-pop-html', nextPopHtml);
+        popEl.innerHTML = nextPopHtml;
+      }
       bindHoverEvents(pillEl, popEl);
       if (popEl.classList.contains('is-visible')) {
         positionPopover(pillEl, popEl);

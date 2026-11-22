@@ -1,9 +1,10 @@
 /**
  * macOS lightweight wrapper .app bundle generator for AGY HUD.
  *
- * Creates `~/Applications/Antigravity (HUD).app` without modifying the signed
- * `/Applications/Antigravity.app` bundle, preserving Apple code signing,
- * Keychain state, and auto-updates.
+ * Creates `/Applications/Antigravity (HUD).app` (falling back to
+ * `~/Applications/Antigravity (HUD).app` if `/Applications` is not writable)
+ * plus a Desktop shortcut pointing to the installed `.app`, without modifying
+ * the signed `/Applications/Antigravity.app` bundle.
  */
 
 import fs from 'node:fs';
@@ -109,17 +110,7 @@ function findIcnsInApp(appPath) {
   }
 }
 
-export async function generateMacCdpLauncher({
-  applicationsDir = path.join(os.homedir(), 'Applications'),
-  bundleName = 'Antigravity (HUD)',
-  port = DEFAULT_CDP_PORT,
-  targetAppOverride = '',
-} = {}) {
-  const p = Number(port) || DEFAULT_CDP_PORT;
-  const detected = targetAppOverride
-    ? { appPath: targetAppOverride, found: fs.existsSync(targetAppOverride) }
-    : findMacAntigravityApp();
-
+async function createBundleAt(applicationsDir, { bundleName, port, detected }) {
   const bundleDir = path.join(applicationsDir, `${bundleName}.app`);
   const contentsDir = path.join(bundleDir, 'Contents');
   const macosDir = path.join(contentsDir, 'MacOS');
@@ -147,12 +138,12 @@ export async function generateMacCdpLauncher({
 
   await fsp.writeFile(
     plistPath,
-    buildMacInfoPlist({ bundleName, port: p, hasIcon }),
+    buildMacInfoPlist({ bundleName, port, hasIcon }),
     'utf8',
   );
   await fsp.writeFile(
     scriptPath,
-    buildMacLauncherScript({ targetAppPath: detected.appPath, port: p }),
+    buildMacLauncherScript({ targetAppPath: detected.appPath, port }),
     { encoding: 'utf8', mode: 0o755 },
   );
   await fsp.chmod(scriptPath, 0o755).catch(() => {});
@@ -161,10 +152,77 @@ export async function generateMacCdpLauncher({
   const now = new Date();
   await fsp.utimes(bundleDir, now, now).catch(() => {});
 
-  // Clean up legacy wrapper name if upgrading from older release
-  const legacyBundleDir = path.join(applicationsDir, 'Antigravity (CDP).app');
-  if (legacyBundleDir !== bundleDir && fs.existsSync(legacyBundleDir)) {
-    await fsp.rm(legacyBundleDir, { recursive: true, force: true }).catch(() => {});
+  return { bundleDir, plistPath, scriptPath, hasIcon };
+}
+
+export async function generateMacCdpLauncher({
+  applicationsDir = '/Applications',
+  fallbackApplicationsDir = path.join(os.homedir(), 'Applications'),
+  desktopDir = path.join(os.homedir(), 'Desktop'),
+  createDesktopShortcut = true,
+  bundleName = 'Antigravity (HUD)',
+  port = DEFAULT_CDP_PORT,
+  targetAppOverride = '',
+} = {}) {
+  const p = Number(port) || DEFAULT_CDP_PORT;
+  const detected = targetAppOverride
+    ? { appPath: targetAppOverride, found: fs.existsSync(targetAppOverride) }
+    : findMacAntigravityApp();
+
+  let effectiveAppsDir = applicationsDir;
+  let bundleInfo;
+  try {
+    bundleInfo = await createBundleAt(effectiveAppsDir, { bundleName, port: p, detected });
+  } catch (err) {
+    if (
+      fallbackApplicationsDir &&
+      fallbackApplicationsDir !== effectiveAppsDir &&
+      (err?.code === 'EACCES' || err?.code === 'EPERM' || err?.code === 'EROFS')
+    ) {
+      effectiveAppsDir = fallbackApplicationsDir;
+      bundleInfo = await createBundleAt(effectiveAppsDir, { bundleName, port: p, detected });
+    } else {
+      throw err;
+    }
+  }
+
+  const { bundleDir, plistPath, scriptPath, hasIcon } = bundleInfo;
+
+  // Create a Desktop shortcut (symlink) pointing to the installed .app bundle
+  const desktopShortcutPath = desktopDir ? path.join(desktopDir, `${bundleName}.app`) : '';
+  let desktopShortcutCreated = false;
+  if (createDesktopShortcut && desktopDir && desktopShortcutPath) {
+    try {
+      await fsp.mkdir(desktopDir, { recursive: true });
+      await fsp.rm(desktopShortcutPath, { recursive: true, force: true }).catch(() => {});
+      const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+      await fsp.symlink(bundleDir, desktopShortcutPath, linkType);
+      desktopShortcutCreated = true;
+    } catch {
+      desktopShortcutCreated = false;
+    }
+  }
+
+  // Clean up legacy wrapper names and old ~/Applications copy when installed in /Applications
+  const cleanupTargets = [
+    path.join(effectiveAppsDir, 'Antigravity (CDP).app'),
+    desktopDir ? path.join(desktopDir, 'Antigravity (CDP).app') : '',
+  ];
+  if (fallbackApplicationsDir && fallbackApplicationsDir !== effectiveAppsDir) {
+    cleanupTargets.push(
+      path.join(fallbackApplicationsDir, `${bundleName}.app`),
+      path.join(fallbackApplicationsDir, 'Antigravity (CDP).app'),
+    );
+  }
+  for (const oldTarget of cleanupTargets) {
+    if (!oldTarget || oldTarget === bundleDir || oldTarget === desktopShortcutPath) continue;
+    try {
+      if (fs.existsSync(oldTarget) || fs.lstatSync(oldTarget)) {
+        await fsp.rm(oldTarget, { recursive: true, force: true }).catch(() => {});
+      }
+    } catch {
+      // ignore missing paths
+    }
   }
 
   return {
@@ -173,6 +231,8 @@ export async function generateMacCdpLauncher({
     targetAppPath: detected.appPath,
     targetAppFound: detected.found,
     bundlePath: bundleDir,
+    desktopShortcutPath: desktopShortcutCreated ? desktopShortcutPath : '',
+    desktopShortcutCreated,
     plistPath,
     scriptPath,
     hasIcon,

@@ -13,7 +13,7 @@ export async function uninstallPlugin({
   targetDir = DEFAULT_PLUGIN_DIR,
   dataDir = resolveDataDir(),
   desktopDir = path.join(os.homedir(), 'Desktop'),
-  applicationsDir = path.join(os.homedir(), 'Applications'),
+  applicationsDir = null,
   purgeData = false,
   silent = false,
 } = {}) {
@@ -36,11 +36,33 @@ export async function uninstallPlugin({
   }
 
   if (process.platform === 'darwin') {
+    const appDirs = applicationsDir
+      ? [applicationsDir]
+      : ['/Applications', path.join(os.homedir(), 'Applications')];
+    for (const dir of appDirs) {
+      for (const appName of ['Antigravity (HUD).app', 'Antigravity (CDP).app']) {
+        const macApp = path.join(dir, appName);
+        if (purgeData) {
+          try {
+            fs.lstatSync(macApp);
+            await fsp.rm(macApp, { recursive: true, force: true });
+            log(`✓ 已移除 macOS 启动器: ${macApp}`);
+          } catch {
+            // ignore missing
+          }
+        }
+      }
+    }
     for (const appName of ['Antigravity (HUD).app', 'Antigravity (CDP).app']) {
-      const macApp = path.join(applicationsDir, appName);
-      if (purgeData && fs.existsSync(macApp)) {
-        await fsp.rm(macApp, { recursive: true, force: true });
-        log(`✓ 已移除 macOS 启动器: ${macApp}`);
+      const deskLink = path.join(desktopDir, appName);
+      if (purgeData) {
+        try {
+          fs.lstatSync(deskLink);
+          await fsp.rm(deskLink, { recursive: true, force: true });
+          log(`✓ 已移除桌面快捷方式: ${deskLink}`);
+        } catch {
+          // ignore missing
+        }
       }
     }
   } else if (process.platform === 'win32') {

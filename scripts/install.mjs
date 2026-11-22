@@ -136,7 +136,10 @@ export async function installPlugin({
       launcher = await generateMacCdpLauncher({
         port: savedCfg.cdpPort,
       });
-      log(`[4/4] 已生成 macOS 套壳启动器: ${launcher.bundlePath}`);
+      log(`[4/4] 已生成 macOS 启动器: ${launcher.bundlePath}`);
+      if (launcher.desktopShortcutCreated && launcher.desktopShortcutPath) {
+        log(`      已创建桌面快捷方式: ${launcher.desktopShortcutPath}`);
+      }
     } else {
       launcher = {
         platform: process.platform,
@@ -150,9 +153,8 @@ export async function installPlugin({
   }
 
   log('');
-  log('安装完成！接下来只需 2 步即可使用：');
-  log('  1. 打开 Antigravity → 左侧 Customizations → Plugins → 打开「AGY HUD」开关');
-  log('  2. 彻底退出 Antigravity（Windows 退出托盘 / macOS 按 Cmd+Q），再通过刚生成的 CDP 启动器重新打开');
+  log('安装完成！接下来只需一步即可启用：');
+  log('  先彻底退出 Antigravity（Windows 退出右下角托盘图标 / macOS 按 Cmd+Q），再通过刚生成的启动器重新打开即可。');
   log('');
 
   return { targetDir, configFile: store.configFile, config: savedCfg, launcher };
