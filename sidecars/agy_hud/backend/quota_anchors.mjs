@@ -1,10 +1,15 @@
 /**
  * Quota Cycle Anchor store for accurate weekly token & cost extrapolation.
  *
- * Tracks per-group weekly quota anchors so both:
- *   1. Scheduled natural resets (`resetTimeMs` advances by > 1 hour)
- *   2. Ad-hoc / manual provider resets or partial top-ups (`remainingFraction` jumps upward)
- * cleanly start a new measurement window without mixing prior-cycle local logs.
+ * State machine handles all real-world weekly quota lifecycles:
+ *   1. Idle Full (`idleFull: true`): when remainingFraction >= 0.9999, countdown
+ *      has not started yet; we stay idle without false reset triggers even if
+ *      `resetTime` is empty or sliding.
+ *   2. Cycle Activation (`idleFull -> active`): as soon as the user makes the first
+ *      real consumption (< 0.9999), the countdown begins and `cycleStartMs` locks
+ *      onto the exact activation moment (`resetTimeMs - 7d` when in range).
+ *   3. Natural Reset vs. Official Early Manual Reset (even when resetTime shifts +7d).
+ *   4. Official Partial Top-up (`remainingFraction` jumps upward without reaching 1.0).
  *
  * Background updates perform O(1) numeric comparisons only and never read
  * transcript files.
@@ -15,8 +20,9 @@ import path from 'node:path';
 import { atomicWriteJson } from './config.mjs';
 
 export const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-const NATURAL_RESET_SHIFT_MS = 60 * 60 * 1000; // > 1 hour jump in resetTime => natural reset
-const MANUAL_RESET_RISE_THRESHOLD = 0.005; // > 0.5% upward jump in remainingFraction => manual reset/top-up
+const FULL_THRESHOLD = 0.9999;
+const NATURAL_RESET_SHIFT_MS = 60 * 60 * 1000; // > 1 hour jump in resetTime
+const MANUAL_RESET_RISE_THRESHOLD = 0.005; // > 0.5% upward jump in remainingFraction
 const PERSIST_DROP_DELTA = 0.002; // Persist monotonic progress only when moved >= 0.2%
 
 function toFiniteFraction(bucket) {
@@ -69,32 +75,96 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
     const frac = toFiniteFraction(wk);
     if (frac === null) continue;
     const resetTimeMs = toResetTimeMs(wk, nowMs);
+    const isFullNow = frac >= FULL_THRESHOLD;
     const prev = next[key] || null;
 
+    // Case 0: Cold start (first time seeing this quota group)
     if (!prev) {
-      // Cold start: if resetTime implies a natural 7-day cycle already in progress and not full, align to resetTime - 7d
-      const naturalStart =
-        resetTimeMs !== null && resetTimeMs - SEVEN_DAYS_MS <= nowMs
-          ? resetTimeMs - SEVEN_DAYS_MS
-          : null;
-      const isFullNow = frac >= 0.9999;
+      if (isFullNow) {
+        next[key] = {
+          cycleStartMs: nowMs,
+          resetTimeMs: null, // Countdown does not start until first consumption
+          anchorFraction: 1.0,
+          lastFraction: frac,
+          lastObservedAtMs: nowMs,
+          idleFull: true,
+          reason: 'idle_full',
+        };
+      } else {
+        const naturalStart =
+          resetTimeMs !== null && resetTimeMs - SEVEN_DAYS_MS <= nowMs
+            ? resetTimeMs - SEVEN_DAYS_MS
+            : null;
+        next[key] = {
+          cycleStartMs: naturalStart ?? nowMs,
+          resetTimeMs,
+          anchorFraction: naturalStart !== null ? 1.0 : frac,
+          lastFraction: frac,
+          lastObservedAtMs: nowMs,
+          idleFull: false,
+          reason: naturalStart !== null ? 'natural_window' : 'first_seen',
+        };
+      }
+      changed = true;
+      shouldPersist = true;
+      continue;
+    }
+
+    // Case 1: Currently full (countdown paused / waiting for first consumption)
+    if (isFullNow) {
+      if (prev.idleFull) {
+        // Stay cleanly idle without false triggers or disk churn while user does nothing
+        next[key] = {
+          ...prev,
+          lastFraction: frac,
+          lastObservedAtMs: nowMs,
+        };
+      } else {
+        // Transitioned from active consumption back to full => reset occurred!
+        const oldResetReached =
+          prev.resetTimeMs !== null && nowMs >= prev.resetTimeMs - 60_000;
+        next[key] = {
+          cycleStartMs: nowMs,
+          resetTimeMs: null, // Wait until first consumption activates the new countdown
+          anchorFraction: 1.0,
+          lastFraction: frac,
+          lastObservedAtMs: nowMs,
+          idleFull: true,
+          reason: oldResetReached ? 'natural_reset' : 'manual_reset',
+        };
+        changed = true;
+        shouldPersist = true;
+      }
+      continue;
+    }
+
+    // Case 2: Transitioning out of Idle Full on first real consumption!
+    if (prev.idleFull) {
+      const inferredStart = resetTimeMs !== null ? resetTimeMs - SEVEN_DAYS_MS : null;
+      const enteredFullAt = Number(prev.cycleStartMs || 0);
+      // Lock onto `resetTimeMs - 7d` if it falls cleanly after entering idle_full and <= now
+      const cycleStartMs =
+        inferredStart !== null &&
+        inferredStart >= enteredFullAt - 60_000 &&
+        inferredStart <= nowMs
+          ? inferredStart
+          : Math.max(enteredFullAt, Number(prev.lastObservedAtMs || enteredFullAt));
 
       next[key] = {
-        cycleStartMs: isFullNow ? nowMs : (naturalStart ?? nowMs),
+        cycleStartMs,
         resetTimeMs,
-        anchorFraction: isFullNow ? frac : (naturalStart !== null ? 1.0 : frac),
+        anchorFraction: 1.0,
         lastFraction: frac,
         lastObservedAtMs: nowMs,
-        reason: isFullNow ? 'first_seen_full' : (naturalStart !== null ? 'natural_window' : 'first_seen'),
+        idleFull: false,
+        reason: 'cycle_activated',
       };
       changed = true;
       shouldPersist = true;
       continue;
     }
 
-    // Rule 1: Reset time jumped forward > 1 hour
-    // Distinguish scheduled natural reset (old resetTime already reached) vs.
-    // official early manual reset that also extends resetTime by a week.
+    // Case 3: Active cycle — resetTime jumped forward > 1 hour (missed idle_full while offline)
     const resetTimeAdvanced =
       resetTimeMs !== null &&
       prev.resetTimeMs !== null &&
@@ -106,23 +176,24 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
       const prevObsMs = Number(prev.lastObservedAtMs || 0);
 
       if (oldResetReached) {
-        // Scheduled natural weekly reset
-        const cycleStartMs = Math.max(
-          prev.resetTimeMs - 60_000,
-          Math.min(nowMs, inferredStart),
-        );
+        // Scheduled natural reset occurred while offline, and user already started consuming
+        // Note: because countdown starts on first consumption after reset, `resetTime - 7d`
+        // may be later than `prev.resetTimeMs` — that exact moment is when the new cycle started!
+        const cycleStartMs =
+          inferredStart >= prev.resetTimeMs - 60_000 && inferredStart <= nowMs
+            ? inferredStart
+            : Math.max(prev.resetTimeMs - 60_000, Math.min(nowMs, inferredStart));
         next[key] = {
           cycleStartMs,
           resetTimeMs,
           anchorFraction: 1.0,
           lastFraction: frac,
           lastObservedAtMs: nowMs,
+          idleFull: false,
           reason: 'natural_reset',
         };
       } else {
-        // Official early manual reset that also pushed resetTime forward:
-        // Only trust `resetTime - 7d` if it falls cleanly in (prevObsMs, nowMs];
-        // otherwise anchor at `nowMs` so pre-reset usage is never mixed in.
+        // Official early manual reset that also pushed resetTime forward
         const cycleStartMs =
           inferredStart > prevObsMs && inferredStart <= nowMs
             ? inferredStart
@@ -133,6 +204,7 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
           anchorFraction: frac >= 0.995 || inferredStart > prevObsMs ? 1.0 : frac,
           lastFraction: frac,
           lastObservedAtMs: nowMs,
+          idleFull: false,
           reason: 'manual_reset',
         };
       }
@@ -141,24 +213,24 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
       continue;
     }
 
-    // Rule 2: Official manual reset or partial top-up (remainingFraction rose noticeably)
-    const isManualResetOrTopUp = frac > Number(prev.lastFraction ?? 1) + MANUAL_RESET_RISE_THRESHOLD;
-
-    if (isManualResetOrTopUp) {
+    // Case 4: Active cycle — official partial top-up (fraction jumped upward without reaching full)
+    const isPartialTopUp = frac > Number(prev.lastFraction ?? 1) + MANUAL_RESET_RISE_THRESHOLD;
+    if (isPartialTopUp) {
       next[key] = {
         cycleStartMs: nowMs,
         resetTimeMs: resetTimeMs ?? prev.resetTimeMs,
         anchorFraction: frac,
         lastFraction: frac,
         lastObservedAtMs: nowMs,
-        reason: frac >= 0.995 ? 'manual_reset' : 'partial_topup',
+        idleFull: false,
+        reason: 'partial_topup',
       };
       changed = true;
       shouldPersist = true;
       continue;
     }
 
-    // Rule 3: Normal monotonic consumption inside current cycle
+    // Case 5: Normal monotonic consumption inside current active cycle
     const drop = Number(prev.lastFraction ?? frac) - frac;
     const updatedReset = resetTimeMs !== null ? resetTimeMs : prev.resetTimeMs;
     if (drop >= PERSIST_DROP_DELTA || updatedReset !== prev.resetTimeMs) {
@@ -172,6 +244,7 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
       resetTimeMs: updatedReset,
       lastFraction: frac,
       lastObservedAtMs: nowMs,
+      idleFull: false,
     };
   }
 
