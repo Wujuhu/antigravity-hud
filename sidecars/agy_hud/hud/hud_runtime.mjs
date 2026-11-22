@@ -37,8 +37,8 @@ export function buildHudCss() {
   border: 1px solid transparent;
   color: var(--hud-text);
   font-family: inherit;
-  font-size: 12px;
-  line-height: 1.2;
+  font-size: 0.875rem;
+  line-height: 1.3333;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   cursor: default;
@@ -80,8 +80,8 @@ export function buildHudCss() {
   color: var(--hud-muted);
 }
 #${HUD_ROOT_ID} .agy-hud-ring {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
   transform: rotate(-90deg);
 }
@@ -256,7 +256,7 @@ export function buildHudCss() {
 }
 #${HUD_POPOVER_ID} .agy-q-bucket {
   display: grid;
-  grid-template-columns: 14px 16px 31px 1fr;
+  grid-template-columns: 14px 16px 32px 1fr;
   align-items: center;
   column-gap: 4px;
   white-space: nowrap;
@@ -264,10 +264,10 @@ export function buildHudCss() {
 #${HUD_POPOVER_ID} .agy-q-lbl {
   color: var(--pop-muted);
   font-size: 11px;
-  text-align: center;
+  text-align: left;
 }
 #${HUD_POPOVER_ID} .agy-q-pct {
-  text-align: right;
+  text-align: left;
   font-variant-numeric: tabular-nums;
 }
 #${HUD_POPOVER_ID} .agy-q-dur {
@@ -807,6 +807,80 @@ export function buildHudInjectExpression(snapshot, config) {
     }
 
     function bindHoverEvents(pillEl, popEl) {
+      // Always replace click handler on popEl so hot-reloaded updates take effect immediately
+      popEl.onclick = function(ev) {
+        var link = ev.target && ev.target.closest ? ev.target.closest('[data-agy-action="open-sidecar"]') : null;
+        if (!link) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        popEl.classList.remove('is-visible');
+
+        function isVisible(el) {
+          if (!el || !el.getBoundingClientRect) return false;
+          var r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        }
+
+        function findVisibleAgyHudTab() {
+          var nodes = document.querySelectorAll('button, [role="tab"], [role="menuitem"]');
+          for (var i = 0; i < nodes.length; i++) {
+            var n = nodes[i];
+            if (popEl.contains(n) || (pillEl && pillEl.contains(n))) continue;
+            if (!isVisible(n)) continue;
+            var txt = (n.textContent || '').trim();
+            var lbl = (n.getAttribute('aria-label') || n.getAttribute('title') || '').trim();
+            if (txt === 'AGY HUD' || lbl === 'AGY HUD') {
+              return n;
+            }
+          }
+          return null;
+        }
+
+        function trySelectOrAddAgyHudTab() {
+          var tab = findVisibleAgyHudTab();
+          if (tab) {
+            tab.click();
+            return true;
+          }
+          var btns = document.querySelectorAll('button');
+          var plusBtn = null;
+          for (var i = 0; i < btns.length; i++) {
+            var b = btns[i];
+            if (popEl.contains(b) || !isVisible(b)) continue;
+            var r = b.getBoundingClientRect();
+            if (r.top < 0 || r.top > 95 || r.left < window.innerWidth * 0.4) continue;
+            var tid = b.getAttribute('data-testid') || '';
+            if (tid === 'toggle-aux-sidebar' || tid === 'toggle-overview-panel' || tid === 'titlebar-more-actions') continue;
+            var aria = (b.getAttribute('aria-label') || b.getAttribute('title') || '').toLowerCase();
+            var txt = (b.textContent || '').trim();
+            if (txt === '+' || /add|new|open|tab|panel|sidecar|plugin/.test(aria)) {
+              plusBtn = b;
+              break;
+            }
+          }
+          if (!plusBtn) return false;
+          plusBtn.click();
+          setTimeout(function() {
+            var item = findVisibleAgyHudTab();
+            if (item) item.click();
+          }, 150);
+          return true;
+        }
+
+        var toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
+        var isExpanded = toggleBtn ? toggleBtn.getAttribute('aria-expanded') === 'true' : false;
+
+        if (!isExpanded && toggleBtn && isVisible(toggleBtn)) {
+          toggleBtn.click();
+          setTimeout(function() {
+            trySelectOrAddAgyHudTab();
+          }, 180);
+          return;
+        }
+
+        trySelectOrAddAgyHudTab();
+      };
+
       if (pillEl.__agyHudBound) return;
       pillEl.__agyHudBound = true;
       var showTimer = null;
@@ -839,101 +913,6 @@ export function buildHudInjectExpression(snapshot, config) {
       pillEl.addEventListener('mouseleave', scheduleClose);
       popEl.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
       popEl.addEventListener('mouseleave', scheduleClose);
-      if (!popEl.__agyHudClickBound) {
-        popEl.__agyHudClickBound = true;
-        popEl.addEventListener('click', function(ev) {
-          var link = ev.target && ev.target.closest ? ev.target.closest('[data-agy-action="open-sidecar"]') : null;
-          if (!link) return;
-          ev.preventDefault();
-          popEl.classList.remove('is-visible');
-
-          function isVisible(el) {
-            if (!el || !el.getBoundingClientRect) return false;
-            var r = el.getBoundingClientRect();
-            return r.width > 0 && r.height > 0;
-          }
-
-          function findVisibleAgyHudTab() {
-            var nodes = document.querySelectorAll('button, [role="tab"], [role="menuitem"]');
-            for (var i = 0; i < nodes.length; i++) {
-              var n = nodes[i];
-              if (popEl.contains(n) || (pillEl && pillEl.contains(n))) continue;
-              if (!isVisible(n)) continue;
-              var txt = (n.textContent || '').trim();
-              var lbl = (n.getAttribute('aria-label') || n.getAttribute('title') || '').trim();
-              if (txt === 'AGY HUD' || lbl === 'AGY HUD') {
-                return n;
-              }
-            }
-            return null;
-          }
-
-          function isAuxSidebarOpen() {
-            var slots = document.querySelectorAll('[data-testid="sidecar-iframe-slot"]');
-            for (var i = 0; i < slots.length; i++) {
-              if (isVisible(slots[i])) return true;
-            }
-            var auxSplit = document.querySelector('[data-testid="aux-pane-split"]');
-            if (auxSplit && auxSplit.children && auxSplit.children.length >= 2) {
-              var lastPane = auxSplit.children[auxSplit.children.length - 1];
-              if (lastPane && lastPane.getBoundingClientRect().width > 120) return true;
-            }
-            return false;
-          }
-
-          function tryOpenFromAuxPlusMenu() {
-            var tab = findVisibleAgyHudTab();
-            if (tab) {
-              tab.click();
-              return true;
-            }
-            // Look for "+" add-tab button in the top-right aux pane header
-            var btns = document.querySelectorAll('button');
-            var plusBtn = null;
-            for (var i = 0; i < btns.length; i++) {
-              var b = btns[i];
-              if (popEl.contains(b) || !isVisible(b)) continue;
-              var r = b.getBoundingClientRect();
-              if (r.top < 0 || r.top > 95 || r.left < window.innerWidth * 0.42) continue;
-              var tid = b.getAttribute('data-testid') || '';
-              if (tid === 'toggle-aux-sidebar' || tid === 'toggle-overview-panel' || tid === 'titlebar-more-actions') continue;
-              var aria = (b.getAttribute('aria-label') || b.getAttribute('title') || '').toLowerCase();
-              var txt = (b.textContent || '').trim();
-              if (txt === '+' || /add|new|open|tab|panel|sidecar|plugin/.test(aria)) {
-                plusBtn = b;
-                break;
-              }
-            }
-            if (!plusBtn) return false;
-            plusBtn.click();
-            setTimeout(function() {
-              var item = findVisibleAgyHudTab();
-              if (item) item.click();
-            }, 120);
-            return true;
-          }
-
-          // 1. If AGY HUD tab is already visible in open aux pane, focus it directly
-          var existingTab = findVisibleAgyHudTab();
-          if (existingTab) {
-            existingTab.click();
-            return;
-          }
-
-          // 2. If aux sidebar is collapsed, toggle it open first via official host button
-          var toggleBtn = document.querySelector('[data-testid="toggle-aux-sidebar"]');
-          if (!isAuxSidebarOpen() && toggleBtn && isVisible(toggleBtn)) {
-            toggleBtn.click();
-            setTimeout(function() {
-              tryOpenFromAuxPlusMenu();
-            }, 140);
-            return;
-          }
-
-          // 3. Aux sidebar is open on another tab -> switch or add AGY HUD tab
-          tryOpenFromAuxPlusMenu();
-        });
-      }
 
       if (!window.__agyHudGlobalEscBound) {
         window.__agyHudGlobalEscBound = true;
