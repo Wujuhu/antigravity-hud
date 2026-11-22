@@ -37,8 +37,9 @@ export function buildHudCss() {
   border: 1px solid transparent;
   color: var(--hud-text);
   font-family: inherit;
-  font-size: 0.875rem;
-  line-height: 1.3333;
+  font-size: var(--hud-font-size, 0.85714rem);
+  font-weight: var(--hud-font-weight, inherit);
+  line-height: var(--hud-line-height, 1.3333);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   cursor: default;
@@ -322,8 +323,8 @@ export function buildHudCss() {
   margin-right: auto;
   padding-left: 4px;
   font-family: inherit;
-  font-size: 0.875rem;
-  font-weight: 400;
+  font-size: 0.85714rem;
+  font-weight: 350;
   line-height: 1.3333;
   font-variant-numeric: tabular-nums;
   color: var(--muted-foreground, rgba(168, 169, 178, 0.92));
@@ -842,28 +843,13 @@ export function buildHudInjectExpression(snapshot, config) {
             tab.click();
             return true;
           }
-          var btns = document.querySelectorAll('button');
-          var plusBtn = null;
-          for (var i = 0; i < btns.length; i++) {
-            var b = btns[i];
-            if (popEl.contains(b) || !isVisible(b)) continue;
-            var r = b.getBoundingClientRect();
-            if (r.top < 0 || r.top > 95 || r.left < window.innerWidth * 0.4) continue;
-            var tid = b.getAttribute('data-testid') || '';
-            if (tid === 'toggle-aux-sidebar' || tid === 'toggle-overview-panel' || tid === 'titlebar-more-actions') continue;
-            var aria = (b.getAttribute('aria-label') || b.getAttribute('title') || '').toLowerCase();
-            var txt = (b.textContent || '').trim();
-            if (txt === '+' || /add|new|open|tab|panel|sidecar|plugin/.test(aria)) {
-              plusBtn = b;
-              break;
-            }
-          }
-          if (!plusBtn) return false;
+          var plusBtn = document.querySelector('[data-testid="side-panel-new-tab-button"]');
+          if (!plusBtn || !isVisible(plusBtn)) return false;
           plusBtn.click();
           setTimeout(function() {
             var item = findVisibleAgyHudTab();
             if (item) item.click();
-          }, 150);
+          }, 180);
           return true;
         }
 
@@ -1156,6 +1142,19 @@ export function buildHudInjectExpression(snapshot, config) {
       }
       if (pillEl.parentElement !== anchor.parent || pillEl.nextSibling !== anchor.before) {
         anchor.parent.insertBefore(pillEl, anchor.before);
+      }
+
+      // Sync exact font metrics from adjacent host button (e.g. Turbo) for 0px typography mismatch
+      if (anchor.before && window.getComputedStyle) {
+        try {
+          var refEl = anchor.before.tagName === 'BUTTON'
+            ? anchor.before
+            : (anchor.before.querySelector && anchor.before.querySelector('button')) || anchor.before;
+          var refCs = window.getComputedStyle(refEl);
+          if (refCs.fontSize) pillEl.style.setProperty('--hud-font-size', refCs.fontSize);
+          if (refCs.fontWeight) pillEl.style.setProperty('--hud-font-weight', refCs.fontWeight);
+          if (refCs.lineHeight) pillEl.style.setProperty('--hud-line-height', refCs.lineHeight);
+        } catch (e) {}
       }
 
       var popEl = document.getElementById(IDS.popover);
