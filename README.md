@@ -1,8 +1,34 @@
 # AGY HUD
 
-> 为 **Antigravity** 打造的跨平台极简输入栏遥测插件：在聊天输入框「权限选择器」左侧注入紧凑胶囊，鼠标悬停展开上下文构成、生成速率、本轮/总缓存命中率、账号全分组 5h/周额度以及周额度总 Token 与费用估算；**支持完全自定义显示的数据项与顺序**，内置 **GitHub Releases 检查与自动更新**。
+> 为 **Antigravity** 打造的跨平台极简输入栏遥测插件：在聊天输入框「权限选择器」左侧注入紧凑胶囊，鼠标悬停展开上下文构成、生成速率、本轮/总缓存命中率与账号全分组 5h/周额度；右侧边栏（Sidecar）提供自由拖拽排序、检查与自动更新、以及**仅在打开边栏时按需计算的周额度总 Token 与费用估算**。
 >
-> **零外部 npm 依赖（Node.js >= 22.5.0）** · **不修改 `app.asar` 与 `config.json`** · **Windows（`.lnk` 快捷方式）& macOS（套壳 `.app`）双平台支持**
+> **统一跨平台框架（Node.js >= 22.5.0 + 标准 Web/CDP，零外部 npm 依赖）** · **不修改 `app.asar` 与 `config.json`** · **Windows（`.lnk`）& macOS（套壳 `.app`）双版本原生支持**
+
+---
+
+## 界面预览（已脱敏实景）
+
+### 输入栏常驻胶囊 + Hover 详情浮层（自动适配深 / 浅主题）
+
+| 深色主题 | 浅色主题 |
+| :---: | :---: |
+| ![AGY HUD 深色主题输入栏胶囊与悬停详情卡](docs/screenshots/hud-hover-dark.png) | ![AGY HUD 浅色主题输入栏胶囊与悬停详情卡](docs/screenshots/hud-hover-light.png) |
+
+### 右侧辅助边栏（Sidecar）：拖拽排序 · 自动更新 · 按需周额度估算
+
+<p align="center">
+  <img src="docs/screenshots/sidecar-panel.png" alt="AGY HUD 右侧辅助边栏设置与按需周额度估算面板" width="440" />
+</p>
+
+---
+
+## 跨平台统一架构（Windows & macOS 双版本）
+
+为降低双端维护成本，本项目采用**单一跨平台框架代码库**：
+* **95%+ 跨平台共享**：Sidecar 后端、本地会话解析、速率统计、原生配额客户端、周额度按需估算、GitHub 自更新引擎、CDP WebSocket 注入桥、输入栏 HUD、右侧边栏 UI 以及 `scripts/install.mjs` / `uninstall.mjs` 全部基于 **Node.js 22+ 内置 API 与标准 Web/CDP** 实现，Windows 与 macOS 共用同一套代码。
+* **仅启动器外壳按系统适配**：
+  * **Windows**：生成无黑窗桌面快捷方式 `Antigravity (CDP).lnk`（配合静默 `.vbs`）。
+  * **macOS**：在 `~/Applications/` 生成套壳 `Antigravity (CDP).app`（复用官方 `.icns` 图标，不破坏苹果代码签名与自动更新）。
 
 ---
 
@@ -23,18 +49,20 @@
 
 ## 🤖 方式一（推荐）：复制简短 Prompt 给你的 AI Agent
 
+> 完整的跨平台安装与卸载执行步骤分别位于 [docs/AGENT_INSTALL.md](./docs/AGENT_INSTALL.md) 与 [docs/AGENT_UNINSTALL.md](./docs/AGENT_UNINSTALL.md)（同时覆盖 Windows 与 macOS）。
+
 ### 一键安装 Prompt
-将下方文字直接复制发送给你的 AI Agent（详细步骤与输出教程规范已写在 [docs/AGENT_INSTALL.md](./docs/AGENT_INSTALL.md) 中）：
+将下方文字直接复制发送给你的 AI Agent，它会自动完成安装，并按文档要求给你输出清晰的使用教程（含后续卸载指引）：
 
 ```text
-请阅读 https://github.com/<你的用户名>/agy-hud 仓库里的 docs/AGENT_INSTALL.md，严格按其中的步骤帮我安装并配置 AGY HUD 插件；配置完成后，务必按文档要求给我输出一份清晰的使用教程。
+请阅读 https://github.com/<你的用户名>/agy-hud 仓库里的 docs/AGENT_INSTALL.md，严格按其中的步骤帮我完成当前系统（Windows / macOS）的 AGY HUD 插件安装与配置；完成后务必按文档要求给我输出一份清晰的使用与卸载教程。
 ```
 
 ### 一键卸载 Prompt
-需要卸载时，直接复制下方文字给你的 AI Agent（详细规范见 [docs/AGENT_UNINSTALL.md](./docs/AGENT_UNINSTALL.md)）：
+需要卸载时，直接复制下方文字给你的 AI Agent：
 
 ```text
-请阅读 https://github.com/<你的用户名>/agy-hud 仓库里的 docs/AGENT_UNINSTALL.md，帮我卸载 AGY HUD 插件（如需连同配置与启动器彻底清理请使用 --purge-data）并告诉我清理结果。
+请阅读 https://github.com/<你的用户名>/agy-hud 仓库里的 docs/AGENT_UNINSTALL.md，帮我卸载当前系统的 AGY HUD 插件（如需连同配置与启动器彻底清理请使用 --purge-data）并告诉我清理结果。
 ```
 
 ---
@@ -87,6 +115,7 @@
 ```bash
 npm test         # 运行全部离线单元测试
 npm run preview  # 生成 preview-output/hud-preview.html，浏览器直接预览亮/暗主题与 Hover 卡片
+npm run screenshots  # 使用本机浏览器以脱敏数据重新截取 docs/screenshots/ 下的高清 UI 预览图
 ```
 
 本项目遵循 MIT 协议并复用了以下优秀开源社区模块（完整声明见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)）：

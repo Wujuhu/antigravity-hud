@@ -634,11 +634,20 @@ export function buildHudInjectExpression(snapshot, config) {
     function positionPopover(pillEl, popEl) {
       var pr = pillEl.getBoundingClientRect();
       var pw = popEl.offsetWidth || 348;
-      var ph = popEl.offsetHeight || 260;
+      var ph = popEl.offsetHeight || 280;
       var left = pr.left + pr.width / 2 - pw / 2;
       left = Math.max(12, Math.min(window.innerWidth - pw - 12, left));
-      var top = pr.top - ph - 8;
-      if (top < 12) top = pr.bottom + 8;
+      // Anchor slightly above the composer box top if reachable so the card never covers the textarea
+      var composerCard = pillEl.closest ? pillEl.closest('form, [class*="composer"], [class*="input"], .mock-composer') : null;
+      var anchorTop = pr.top;
+      if (composerCard) {
+        var cr = composerCard.getBoundingClientRect();
+        if (cr && cr.top < anchorTop && anchorTop - cr.top < 140) {
+          anchorTop = cr.top;
+        }
+      }
+      var top = anchorTop - ph - 10;
+      if (top < 12) top = Math.max(12, pr.top - ph - 8);
       popEl.style.left = Math.round(left) + 'px';
       popEl.style.top = Math.round(top) + 'px';
     }
