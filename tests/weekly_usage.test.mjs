@@ -154,15 +154,39 @@ test('quota anchors simultaneously handle natural resets, official manual resets
   assert.equal(estAfterTopUp.groups[0].estimatedTotalTokens, 20_000_000);
   assert.equal(estAfterTopUp.groups[0].estimatedTotalCostUsd, 40);
 
-  // 4. Scheduled natural reset (resetTime advances by +7 days)
-  const reset2 = reset1 + SEVEN_DAYS_MS;
-  const now5 = reset1 + 600_000; // 10 minutes after natural reset
-  const step4 = updateAnchorsFromQuotaGroups(
+  // 4. Official early manual reset that ALSO extends resetTime by +7 days (before old resetTime arrives)
+  const now4b = Date.parse('2026-11-24T10:00:00.000Z'); // still 2 days before reset1 (11-26)
+  const extendedResetFromNow = now4b - 120_000 + SEVEN_DAYS_MS; // reset happened 2 min ago, +7d from reset moment
+  const step3c = updateAnchorsFromQuotaGroups(
     step3b.anchors,
+    [{ key: 'gemini', weekly: { remainingFraction: 1.0, resetTimeMs: extendedResetFromNow } }],
+    now4b,
+  );
+  assert.equal(step3c.anchors.gemini.reason, 'manual_reset');
+  assert.equal(step3c.anchors.gemini.cycleStartMs, now4b - 120_000);
+  assert.equal(step3c.anchors.gemini.anchorFraction, 1.0);
+
+  // 4b. Official early reset extending resetTime from old resetTime (+7d from old resetTime, so inferredStart > now)
+  const now4c = Date.parse('2026-11-25T08:00:00.000Z');
+  const extendedFromOld = extendedResetFromNow + SEVEN_DAYS_MS;
+  const step3d = updateAnchorsFromQuotaGroups(
+    step3c.anchors,
+    [{ key: 'gemini', weekly: { remainingFraction: 1.0, resetTimeMs: extendedFromOld } }],
+    now4c,
+  );
+  assert.equal(step3d.anchors.gemini.reason, 'manual_reset');
+  assert.equal(step3d.anchors.gemini.cycleStartMs, now4c);
+  assert.equal(step3d.anchors.gemini.anchorFraction, 1.0);
+
+  // 5. Scheduled natural reset (old resetTime actually arrived, new resetTime advances +7 days)
+  const reset2 = extendedFromOld + SEVEN_DAYS_MS;
+  const now5 = extendedFromOld + 600_000; // 10 minutes after natural reset
+  const step4 = updateAnchorsFromQuotaGroups(
+    step3d.anchors,
     [{ key: 'gemini', weekly: { remainingFraction: 0.98, resetTimeMs: reset2 } }],
     now5,
   );
-  assert.equal(step4.anchors.gemini.cycleStartMs, reset1);
+  assert.equal(step4.anchors.gemini.cycleStartMs, extendedFromOld);
   assert.equal(step4.anchors.gemini.anchorFraction, 1.0);
   assert.equal(step4.anchors.gemini.reason, 'natural_reset');
 });

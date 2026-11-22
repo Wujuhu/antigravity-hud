@@ -92,22 +92,50 @@ export function updateAnchorsFromQuotaGroups(currentAnchors = {}, quotaGroups = 
       continue;
     }
 
-    // Rule 1: Scheduled natural weekly reset (resetTime jumped forward > 1 hour)
-    const isNaturalReset =
+    // Rule 1: Reset time jumped forward > 1 hour
+    // Distinguish scheduled natural reset (old resetTime already reached) vs.
+    // official early manual reset that also extends resetTime by a week.
+    const resetTimeAdvanced =
       resetTimeMs !== null &&
       prev.resetTimeMs !== null &&
       resetTimeMs - prev.resetTimeMs > NATURAL_RESET_SHIFT_MS;
 
-    if (isNaturalReset) {
-      const cycleStartMs = Math.min(nowMs, resetTimeMs - SEVEN_DAYS_MS);
-      next[key] = {
-        cycleStartMs,
-        resetTimeMs,
-        anchorFraction: 1.0,
-        lastFraction: frac,
-        lastObservedAtMs: nowMs,
-        reason: 'natural_reset',
-      };
+    if (resetTimeAdvanced) {
+      const oldResetReached = nowMs >= prev.resetTimeMs - 60_000;
+      const inferredStart = resetTimeMs - SEVEN_DAYS_MS;
+      const prevObsMs = Number(prev.lastObservedAtMs || 0);
+
+      if (oldResetReached) {
+        // Scheduled natural weekly reset
+        const cycleStartMs = Math.max(
+          prev.resetTimeMs - 60_000,
+          Math.min(nowMs, inferredStart),
+        );
+        next[key] = {
+          cycleStartMs,
+          resetTimeMs,
+          anchorFraction: 1.0,
+          lastFraction: frac,
+          lastObservedAtMs: nowMs,
+          reason: 'natural_reset',
+        };
+      } else {
+        // Official early manual reset that also pushed resetTime forward:
+        // Only trust `resetTime - 7d` if it falls cleanly in (prevObsMs, nowMs];
+        // otherwise anchor at `nowMs` so pre-reset usage is never mixed in.
+        const cycleStartMs =
+          inferredStart > prevObsMs && inferredStart <= nowMs
+            ? inferredStart
+            : nowMs;
+        next[key] = {
+          cycleStartMs,
+          resetTimeMs,
+          anchorFraction: frac >= 0.995 || inferredStart > prevObsMs ? 1.0 : frac,
+          lastFraction: frac,
+          lastObservedAtMs: nowMs,
+          reason: 'manual_reset',
+        };
+      }
       changed = true;
       shouldPersist = true;
       continue;
