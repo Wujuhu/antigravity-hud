@@ -382,6 +382,8 @@ export function summarizeTurnsSpeed(turns = []) {
       lastStreamSec: null,
       lastTtftSec: null,
       avgTtftSec: null,
+      lastTurnCacheHitPct: null,
+      avgCacheHitPct: null,
     };
   }
 
@@ -406,6 +408,18 @@ export function summarizeTurnsSpeed(turns = []) {
         ) / 100
       : null;
 
+  const validCacheTurns = turns.filter(
+    (t) => t?.cacheHitPct != null && Number.isFinite(Number(t.cacheHitPct)),
+  );
+  const avgCacheHitPct =
+    validCacheTurns.length > 0
+      ? Math.round(
+          (validCacheTurns.reduce((sum, t) => sum + Number(t.cacheHitPct), 0) /
+            validCacheTurns.length) *
+            10,
+        ) / 10
+      : null;
+
   return {
     latestTokPerSec: lastTurn?.tpsExact ?? null,
     latestStreamTokPerSec: lastTurn?.streamTps ?? null,
@@ -415,6 +429,11 @@ export function summarizeTurnsSpeed(turns = []) {
     lastStreamSec: lastTurn?.streamDurSec > 0 ? lastTurn.streamDurSec : null,
     lastTtftSec: lastTurn?.avgTtftSec ?? null,
     avgTtftSec,
+    lastTurnCacheHitPct:
+      lastTurn?.cacheHitPct != null && Number.isFinite(Number(lastTurn.cacheHitPct))
+        ? Number(lastTurn.cacheHitPct)
+        : null,
+    avgCacheHitPct,
   };
 }
 
@@ -518,6 +537,8 @@ export function readConversationSqliteMetrics(appData, convId) {
       lastStreamSec: turnSpeed.lastStreamSec ?? (last.stream > 0 ? Math.round(last.stream * 10) / 10 : null),
       lastTtftSec: turnSpeed.lastTtftSec ?? (last.ttft > 0 ? Math.round(last.ttft * 100) / 100 : null),
       avgTtftSec: turnSpeed.avgTtftSec ?? fallbackAvgTtftSec,
+      lastTurnCacheHitPct: turnSpeed.lastTurnCacheHitPct,
+      avgCacheHitPct: turnSpeed.avgCacheHitPct,
       lastOutputTokens: last.outTok,
       lastTurnTokens: lastTurn ? lastTurn.totalTokens : last.ctx + last.outTok,
       lastTurnCostUsd: lastTurn ? lastTurn.totalCostUsd : 0,

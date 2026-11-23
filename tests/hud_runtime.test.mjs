@@ -243,9 +243,11 @@ test('sqlite_metrics computes stream TPS with fallback, splits model & effort, a
   assert.equal(summarizeTurnsSpeed(step1And2).avgTokPerSec, 120);
 
   const multiTurnSpeed = summarizeTurnsSpeed(turns);
-  // Turn 1 = 200 tok/s (avg TTFT 2.5s), Turn 2 = 100 tok/s (avg TTFT 1.0s)
+  // Turn 1 = 200 tok/s (avg TTFT 2.5s, cache 92.5%), Turn 2 = 100 tok/s (avg TTFT 1.0s, cache 90.0%)
   assert.equal(multiTurnSpeed.latestTokPerSec, 100);
   assert.equal(multiTurnSpeed.lastTtftSec, 1);
   assert.equal(multiTurnSpeed.avgTokPerSec, 150);
   assert.equal(multiTurnSpeed.avgTtftSec, 1.75);
+  assert.equal(multiTurnSpeed.lastTurnCacheHitPct, 90);
+  assert.equal(multiTurnSpeed.avgCacheHitPct, 91.3);
 });

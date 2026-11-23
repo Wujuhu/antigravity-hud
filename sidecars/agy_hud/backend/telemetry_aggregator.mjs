@@ -350,12 +350,20 @@ export function assembleHudSnapshot({
       sessionTotalCostUsd,
     },
     cache: {
-      lastHitPct: Number.isFinite(Number(cache.cacheHitRatio)) ? Number(cache.cacheHitRatio) : null,
+      lastHitPct:
+        speedMetrics?.lastTurnCacheHitPct != null && Number.isFinite(Number(speedMetrics.lastTurnCacheHitPct))
+          ? Number(speedMetrics.lastTurnCacheHitPct)
+          : Number.isFinite(Number(cache.cacheHitRatio))
+            ? Number(cache.cacheHitRatio)
+            : null,
       lastCachedTokens: Number(cache.cachedTokens || 0),
       lastPromptTokens: Number(cache.lastPromptTokens || 0),
-      sessionHitPct: Number.isFinite(Number(cache.sessionCacheHitRatio))
-        ? Number(cache.sessionCacheHitRatio)
-        : null,
+      sessionHitPct:
+        speedMetrics?.avgCacheHitPct != null && Number.isFinite(Number(speedMetrics.avgCacheHitPct))
+          ? Number(speedMetrics.avgCacheHitPct)
+          : Number.isFinite(Number(cache.sessionCacheHitRatio))
+            ? Number(cache.sessionCacheHitRatio)
+            : null,
       cumulativeInputTokens: Number(cache.cumulativeInputTokens || 0),
       cumulativeCachedTokens: Number(cache.cumulativeCachedTokens || 0),
       cumulativeOutputTokens: Number(cache.cumulativeOutputTokens || 0),
