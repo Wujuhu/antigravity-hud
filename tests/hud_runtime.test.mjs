@@ -23,6 +23,7 @@ import {
   buildPerTurnSummaries,
   computePrimaryTps,
   splitModelAndEffort,
+  summarizeTurnsSpeed,
 } from '../sidecars/agy_hud/backend/sqlite_metrics.mjs';
 import { installPlugin } from '../scripts/install.mjs';
 import { uninstallPlugin } from '../scripts/uninstall.mjs';
@@ -223,4 +224,28 @@ test('sqlite_metrics computes stream TPS with fallback, splits model & effort, a
   assert.equal(turns[1].modelLabel, 'Claude Sonnet 4.6');
   assert.equal(turns[1].effort, 'Medium');
   assert.equal(turns[1].tps, 100);
+
+  // Live progressive turn speed: after call 1 -> 200 tok/s; after calls 1+2 in same turn -> composite 200 tok/s;
+  // after turn 2 (100 tok/s) -> current turn = 100 tok/s, session mean across 2 turns = (200 + 100) / 2 = 150 tok/s
+  const step1Only = buildPerTurnSummaries([
+    { idx: 1, maxStepIdx: 3, modelName: 'Gemini 4 Neon (High)', inTok: 1000, cacheWrite: 0, cacheRead: 9000, outTok: 400, thinkTok: 0, respTok: 400, ttft: 2.0, stream: 2.0, totDur: 4.0 },
+  ], [0]);
+  assert.equal(summarizeTurnsSpeed(step1Only).latestTokPerSec, 200);
+  assert.equal(summarizeTurnsSpeed(step1Only).lastTtftSec, 2);
+
+  const step1And2 = buildPerTurnSummaries([
+    { idx: 1, maxStepIdx: 3, modelName: 'Gemini 4 Neon (High)', inTok: 1000, cacheWrite: 0, cacheRead: 9000, outTok: 400, thinkTok: 0, respTok: 400, ttft: 2.0, stream: 2.0, totDur: 4.0 },
+    { idx: 2, maxStepIdx: 6, modelName: 'Gemini 4 Neon (High)', inTok: 1000, cacheWrite: 0, cacheRead: 9000, outTok: 800, thinkTok: 0, respTok: 800, ttft: 4.0, stream: 8.0, totDur: 12.0 },
+  ], [0]);
+  // (400 + 800) / (2.0 + 8.0) = 120 tok/s, avg TTFT = (2.0 + 4.0) / 2 = 3.0s
+  assert.equal(summarizeTurnsSpeed(step1And2).latestTokPerSec, 120);
+  assert.equal(summarizeTurnsSpeed(step1And2).lastTtftSec, 3);
+  assert.equal(summarizeTurnsSpeed(step1And2).avgTokPerSec, 120);
+
+  const multiTurnSpeed = summarizeTurnsSpeed(turns);
+  // Turn 1 = 200 tok/s (avg TTFT 2.5s), Turn 2 = 100 tok/s (avg TTFT 1.0s)
+  assert.equal(multiTurnSpeed.latestTokPerSec, 100);
+  assert.equal(multiTurnSpeed.lastTtftSec, 1);
+  assert.equal(multiTurnSpeed.avgTokPerSec, 150);
+  assert.equal(multiTurnSpeed.avgTtftSec, 1.75);
 });

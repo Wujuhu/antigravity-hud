@@ -286,6 +286,7 @@ export function buildPerTurnSummaries(validItems = [], userStepIdxs = []) {
         thinkTok: 0,
         respTok: 0,
         ttftSec: 0,
+        ttftCount: 0,
         streamSec: 0,
         totalDurSec: 0,
         totalCostUsd: 0,
@@ -306,7 +307,10 @@ export function buildPerTurnSummaries(validItems = [], userStepIdxs = []) {
     acc.outTok += item.outTok;
     acc.thinkTok += item.thinkTok;
     acc.respTok += item.respTok;
-    acc.ttftSec += item.ttft;
+    if (item.ttft > 0) {
+      acc.ttftSec += item.ttft;
+      acc.ttftCount += 1;
+    }
     acc.streamSec += item.stream;
     acc.totalDurSec += item.totDur;
 
@@ -333,6 +337,8 @@ export function buildPerTurnSummaries(validItems = [], userStepIdxs = []) {
         acc.totalDurSec,
       );
       const { modelLabel, effort } = splitModelAndEffort(acc.rawModel);
+      const avgTtftSec =
+        acc.ttftCount > 0 ? Math.round((acc.ttftSec / acc.ttftCount) * 100) / 100 : null;
       return {
         turnIndex: acc.turnIndex,
         startStepIdx: acc.startStepIdx,
@@ -351,6 +357,7 @@ export function buildPerTurnSummaries(validItems = [], userStepIdxs = []) {
         totalDurSec: Math.round(acc.totalDurSec * 10) / 10,
         streamDurSec: Math.round(acc.streamSec * 10) / 10,
         ttftSec: Math.round(acc.ttftSec * 10) / 10,
+        avgTtftSec,
         tps: displayTps != null ? Math.round(displayTps) : null,
         tpsExact: displayTps,
         streamTps,
@@ -358,6 +365,57 @@ export function buildPerTurnSummaries(validItems = [], userStepIdxs = []) {
         totalCostUsd: Math.round(acc.totalCostUsd * 10000) / 10000,
       };
     });
+}
+
+/**
+ * Derive live current-turn composite speed (updated as each LLM call in the turn finishes)
+ * and across-turn session average speed (arithmetic mean over all turns in the conversation).
+ */
+export function summarizeTurnsSpeed(turns = []) {
+  if (!Array.isArray(turns) || turns.length === 0) {
+    return {
+      latestTokPerSec: null,
+      latestStreamTokPerSec: null,
+      latestE2eTokPerSec: null,
+      avgTokPerSec: null,
+      lastDurationSec: null,
+      lastStreamSec: null,
+      lastTtftSec: null,
+      avgTtftSec: null,
+    };
+  }
+
+  const lastTurn = turns[turns.length - 1];
+  const validTpsTurns = turns.filter((t) => Number.isFinite(Number(t?.tpsExact)) && Number(t.tpsExact) > 0);
+  const avgTokPerSec =
+    validTpsTurns.length > 0
+      ? Math.round(
+          (validTpsTurns.reduce((sum, t) => sum + Number(t.tpsExact), 0) / validTpsTurns.length) * 10,
+        ) / 10
+      : null;
+
+  const validTtftTurns = turns.filter(
+    (t) => Number.isFinite(Number(t?.avgTtftSec)) && Number(t.avgTtftSec) > 0,
+  );
+  const avgTtftSec =
+    validTtftTurns.length > 0
+      ? Math.round(
+          (validTtftTurns.reduce((sum, t) => sum + Number(t.avgTtftSec), 0) /
+            validTtftTurns.length) *
+            100,
+        ) / 100
+      : null;
+
+  return {
+    latestTokPerSec: lastTurn?.tpsExact ?? null,
+    latestStreamTokPerSec: lastTurn?.streamTps ?? null,
+    latestE2eTokPerSec: lastTurn?.e2eTps ?? null,
+    avgTokPerSec,
+    lastDurationSec: lastTurn?.totalDurSec > 0 ? lastTurn.totalDurSec : null,
+    lastStreamSec: lastTurn?.streamDurSec > 0 ? lastTurn.streamDurSec : null,
+    lastTtftSec: lastTurn?.avgTtftSec ?? null,
+    avgTtftSec,
+  };
 }
 
 const dbMetricsCache = new Map();
@@ -439,10 +497,11 @@ export function readConversationSqliteMetrics(appData, convId) {
     }
 
     const last = validItems[validItems.length - 1];
-    const latestRate = computePrimaryTps(last.outTok, last.stream, last.totDur);
-    const avgRate = computePrimaryTps(sumOut, sumStream, sumTotDur);
-    const avgTtftSec = ttftCount > 0 ? Math.round((sumTtft / ttftCount) * 100) / 100 : null;
+    const fallbackLastRate = computePrimaryTps(last.outTok, last.stream, last.totDur);
+    const fallbackAvgRate = computePrimaryTps(sumOut, sumStream, sumTotDur);
+    const fallbackAvgTtftSec = ttftCount > 0 ? Math.round((sumTtft / ttftCount) * 100) / 100 : null;
     const turns = buildPerTurnSummaries(validItems, userStepIdxs);
+    const turnSpeed = summarizeTurnsSpeed(turns);
     const lastTurn = turns.length > 0 ? turns[turns.length - 1] : null;
     const sessionTotalTokens = turns.reduce((sum, t) => sum + Number(t.totalTokens || 0), 0);
     const sessionTotalCostUsd = Math.round(
@@ -451,14 +510,14 @@ export function readConversationSqliteMetrics(appData, convId) {
 
     const result = {
       source: 'sqlite',
-      latestTokPerSec: latestRate.displayTps,
-      latestStreamTokPerSec: latestRate.streamTps,
-      latestE2eTokPerSec: latestRate.e2eTps,
-      avgTokPerSec: avgRate.displayTps,
-      lastDurationSec: last.totDur > 0 ? Math.round(last.totDur * 10) / 10 : null,
-      lastStreamSec: last.stream > 0 ? Math.round(last.stream * 10) / 10 : null,
-      lastTtftSec: last.ttft > 0 ? Math.round(last.ttft * 100) / 100 : null,
-      avgTtftSec,
+      latestTokPerSec: turnSpeed.latestTokPerSec ?? fallbackLastRate.displayTps,
+      latestStreamTokPerSec: turnSpeed.latestStreamTokPerSec ?? fallbackLastRate.streamTps,
+      latestE2eTokPerSec: turnSpeed.latestE2eTokPerSec ?? fallbackLastRate.e2eTps,
+      avgTokPerSec: turnSpeed.avgTokPerSec ?? fallbackAvgRate.displayTps,
+      lastDurationSec: turnSpeed.lastDurationSec ?? (last.totDur > 0 ? Math.round(last.totDur * 10) / 10 : null),
+      lastStreamSec: turnSpeed.lastStreamSec ?? (last.stream > 0 ? Math.round(last.stream * 10) / 10 : null),
+      lastTtftSec: turnSpeed.lastTtftSec ?? (last.ttft > 0 ? Math.round(last.ttft * 100) / 100 : null),
+      avgTtftSec: turnSpeed.avgTtftSec ?? fallbackAvgTtftSec,
       lastOutputTokens: last.outTok,
       lastTurnTokens: lastTurn ? lastTurn.totalTokens : last.ctx + last.outTok,
       lastTurnCostUsd: lastTurn ? lastTurn.totalCostUsd : 0,
