@@ -19,7 +19,9 @@ function parseTimestampMs(raw) {
 }
 
 /**
- * Compute generation speed metrics directly from parsed JSONL transcript steps.
+ * Compute live current-turn composite speed & cache hit rate and across-turn
+ * session averages directly from parsed JSONL transcript steps (aligned with
+ * SQLite per-turn semantics when the conversation DB is unavailable).
  */
 export function computeSpeedMetricsFromSteps(steps = []) {
   if (!Array.isArray(steps) || steps.length === 0) {
@@ -28,30 +30,61 @@ export function computeSpeedMetricsFromSteps(steps = []) {
       avgTokPerSec: null,
       lastDurationSec: null,
       lastOutputTokens: 0,
+      lastTurnCacheHitPct: null,
+      avgCacheHitPct: null,
       upstreamModelId: '',
       sampleCount: 0,
     };
   }
 
-  let latestTokPerSec = null;
-  let lastDurationSec = null;
+  const hasUserBoundaries = steps.some((s) => s && s.type === 'USER_INPUT');
+  const turns = [];
+  let currentTurn = null;
   let lastOutputTokens = 0;
   let upstreamModelId = '';
-  let totalValidOutput = 0;
-  let totalValidDurationSec = 0;
   let sampleCount = 0;
+
+  const startNewTurn = () => {
+    const t = {
+      validOutTok: 0,
+      validDurationSec: 0,
+      promptTok: 0,
+      cacheReadTok: 0,
+      hasData: false,
+    };
+    turns.push(t);
+    return t;
+  };
 
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
-    if (!step || step.type !== 'PLANNER_RESPONSE') continue;
+    if (!step) continue;
+
+    if (step.type === 'USER_INPUT') {
+      currentTurn = startNewTurn();
+      continue;
+    }
+
+    if (step.type !== 'PLANNER_RESPONSE') continue;
+
+    if (!hasUserBoundaries || !currentTurn) {
+      currentTurn = startNewTurn();
+    }
 
     if (typeof step.model === 'string' && step.model.trim()) {
       upstreamModelId = step.model.trim();
     }
 
-    const outTok = Number(step.output_tokens || 0);
+    const inTok = Math.max(0, Number(step.input_tokens || 0));
+    const cacheReadTok = Math.max(0, Number(step.cache_read_tokens || 0));
+    const outTok = Math.max(0, Number(step.output_tokens || 0));
     if (outTok > 0) {
       lastOutputTokens = outTok;
+    }
+    if (inTok + cacheReadTok > 0) {
+      currentTurn.promptTok += inTok + cacheReadTok;
+      currentTurn.cacheReadTok += cacheReadTok;
+      currentTurn.hasData = true;
     }
 
     // Prefer explicit duration if recorded; otherwise measure against the next logged step
@@ -77,25 +110,50 @@ export function computeSpeedMetricsFromSteps(steps = []) {
     ) {
       const rate = outTok / durationSec;
       if (Number.isFinite(rate) && rate > 0 && rate <= MAX_REASONABLE_TOK_PER_SEC) {
-        latestTokPerSec = Math.round(rate * 10) / 10;
-        lastDurationSec = Math.round(durationSec * 10) / 10;
-        totalValidOutput += outTok;
-        totalValidDurationSec += durationSec;
+        currentTurn.validOutTok += outTok;
+        currentTurn.validDurationSec += durationSec;
+        currentTurn.hasData = true;
         sampleCount += 1;
       }
     }
   }
 
+  const activeTurns = turns
+    .filter((t) => t.hasData)
+    .map((t) => {
+      const tps =
+        t.validDurationSec > 0
+          ? Math.round((t.validOutTok / t.validDurationSec) * 10) / 10
+          : null;
+      const cacheHitPct =
+        t.promptTok > 0 ? Math.round((t.cacheReadTok / t.promptTok) * 1000) / 10 : null;
+      return {
+        tps,
+        durationSec: t.validDurationSec > 0 ? Math.round(t.validDurationSec * 10) / 10 : null,
+        cacheHitPct,
+      };
+    });
+
+  const lastTurn = activeTurns.length > 0 ? activeTurns[activeTurns.length - 1] : null;
+  const validTps = activeTurns.filter((t) => t.tps != null && t.tps > 0);
   const avgTokPerSec =
-    totalValidDurationSec > 0
-      ? Math.round((totalValidOutput / totalValidDurationSec) * 10) / 10
+    validTps.length > 0
+      ? Math.round((validTps.reduce((s, t) => s + t.tps, 0) / validTps.length) * 10) / 10
+      : null;
+
+  const validCache = activeTurns.filter((t) => t.cacheHitPct != null);
+  const avgCacheHitPct =
+    validCache.length > 0
+      ? Math.round((validCache.reduce((s, t) => s + t.cacheHitPct, 0) / validCache.length) * 10) / 10
       : null;
 
   return {
-    latestTokPerSec,
+    latestTokPerSec: lastTurn?.tps ?? null,
     avgTokPerSec,
-    lastDurationSec,
+    lastDurationSec: lastTurn?.durationSec ?? null,
     lastOutputTokens,
+    lastTurnCacheHitPct: lastTurn?.cacheHitPct ?? null,
+    avgCacheHitPct,
     upstreamModelId,
     sampleCount,
   };

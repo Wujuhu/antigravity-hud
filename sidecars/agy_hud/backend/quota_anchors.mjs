@@ -55,7 +55,7 @@ function toFiniteFraction(bucket) {
   return null;
 }
 
-function toResetTimeMs(bucket, nowMs) {
+export function toResetTimeMs(bucket, nowMs = Date.now()) {
   if (!bucket || typeof bucket !== 'object') return null;
   if (Number.isFinite(Number(bucket.resetTimeMs)) && Number(bucket.resetTimeMs) > 0) {
     return Number(bucket.resetTimeMs);

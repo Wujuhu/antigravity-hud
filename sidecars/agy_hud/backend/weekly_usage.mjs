@@ -18,10 +18,18 @@ import {
   FIVE_HOURS_MS,
   SEVEN_DAYS_MS,
   anchorKeyFor,
+  toResetTimeMs,
 } from './quota_anchors.mjs';
 
 export const MIN_USED_FRACTION_FOR_EXTRAPOLATION = 0.01; // >= 1% net quota change triggers estimation
 const MAX_USED_FRACTION_FOR_EXTRAPOLATION = 0.999;
+
+// Canonical display order and supported bucket windows per quota group
+const QUOTA_GROUP_META = {
+  gemini: { order: 0, supportsFiveHour: true },
+  gpt_claude: { order: 1, supportsFiveHour: true },
+  argon: { order: 2, supportsFiveHour: false },
+};
 
 // Standard (non-promotional) API-equivalent rates in USD per 1M tokens
 export const RATE_TABLE = {
@@ -269,12 +277,7 @@ function resolveWindowCutoffs(anchors = {}, quotaGroups = [], windowKind = 'week
       continue;
     }
     const bucket = windowKind === '5h' ? grp?.fiveHour : grp?.weekly;
-    const resetMs =
-      bucket && Number.isFinite(Number(bucket.resetTimeMs)) && Number(bucket.resetTimeMs) > 0
-        ? Number(bucket.resetTimeMs)
-        : bucket && Number.isFinite(Number(bucket.remainingMs)) && Number(bucket.remainingMs) > 0
-          ? nowMs + Number(bucket.remainingMs)
-          : null;
+    const resetMs = toResetTimeMs(bucket, nowMs);
     if (resetMs !== null && resetMs - windowMs <= nowMs) {
       cutoffs[key] = resetMs - windowMs;
     }
@@ -441,7 +444,17 @@ export function buildWeeklyQuotaEstimates(weeklyUsage, quotaGroups = [], anchors
   const byGroupFiveHour = weeklyUsage?.byGroupFiveHour || {};
   const groupEstimates = [];
 
-  for (const grp of quotaGroups || []) {
+  // Enforce canonical group display order: Gemini -> GPT&Claude -> Argon -> any additional groups
+  const orderedGroups = (quotaGroups || [])
+    .map((grp, idx) => ({
+      grp,
+      idx,
+      order: QUOTA_GROUP_META[grp?.key]?.order ?? 100 + idx,
+    }))
+    .sort((a, b) => a.order - b.order || a.idx - b.idx)
+    .map((entry) => entry.grp);
+
+  for (const grp of orderedGroups) {
     const emptyActual = { tokens: 0, costUsd: 0, cacheSavedUsd: 0, turns: 0 };
     const actualWeekly = byGroupWeekly[grp.key] || emptyActual;
     const actualFiveHour = byGroupFiveHour[grp.key] || emptyActual;
@@ -453,7 +466,8 @@ export function buildWeeklyQuotaEstimates(weeklyUsage, quotaGroups = [], anchors
       windowKind: 'weekly',
     });
 
-    const hasFiveHour = Boolean(grp.fiveHour) || grp.key === 'gemini' || grp.key === 'gpt_claude';
+    const groupMeta = QUOTA_GROUP_META[grp.key];
+    const hasFiveHour = groupMeta ? groupMeta.supportsFiveHour : Boolean(grp.fiveHour);
     const fhEst = hasFiveHour
       ? computeBucketQuotaEstimate({
           actual: actualFiveHour,
@@ -494,11 +508,14 @@ export function buildWeeklyQuotaEstimates(weeklyUsage, quotaGroups = [], anchors
       .reduce((sum, item) => sum + (item.estimatedTotalCostUsd || 0), 0)
       .toFixed(2),
   );
-  const hasExtrapolation = groupEstimates.some(
-    (item) =>
-      item.estimatedTotalTokens !== null ||
-      (item.fiveHourEstimate && item.fiveHourEstimate.estimatedTotalTokens !== null),
+  const hasWeeklyExtrapolation = groupEstimates.some(
+    (item) => item.estimatedTotalTokens !== null,
   );
+  const hasExtrapolation =
+    hasWeeklyExtrapolation ||
+    groupEstimates.some(
+      (item) => item.fiveHourEstimate && item.fiveHourEstimate.estimatedTotalTokens !== null,
+    );
 
   return {
     windowDays: weeklyUsage?.windowDays || 7,
@@ -507,8 +524,8 @@ export function buildWeeklyQuotaEstimates(weeklyUsage, quotaGroups = [], anchors
     actualTotalCostUsd7d: weeklyUsage?.totalCostUsd || 0,
     actualCacheSavedUsd7d: weeklyUsage?.totalCacheSavedUsd || 0,
     hasExtrapolation,
-    estimatedCombinedWeeklyTokens: hasExtrapolation ? sumEstimatedTokens : null,
-    estimatedCombinedWeeklyCostUsd: hasExtrapolation ? sumEstimatedCostUsd : null,
+    estimatedCombinedWeeklyTokens: hasWeeklyExtrapolation ? sumEstimatedTokens : null,
+    estimatedCombinedWeeklyCostUsd: hasWeeklyExtrapolation ? sumEstimatedCostUsd : null,
     groups: groupEstimates,
   };
 }

@@ -27,6 +27,15 @@
       '<path d="M4 6l4 4 4-4"/>' +
     '</svg>';
 
+  function escHtml(str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function fmtTok(n) {
     const v = Number(n || 0);
     if (!Number.isFinite(v) || v <= 0) return '0';
@@ -249,15 +258,17 @@
         const rowCells = rows
           .map((r, idx) => {
             const rowNum = idx + 1;
-            const tip = `${g.label} · ${windowTipMap[r.window] || '额度估算'}`;
-            const estPart =
+            const tip = escHtml(`${g.label} · ${windowTipMap[r.window] || '额度估算'}`);
+            const actualText = escHtml(`${fmtTok(r.actualTokens)} · ${fmtUsd(r.actualCostUsd)}`);
+            const estPart = escHtml(
               r.estimatedTotalTokens != null
                 ? `≈ ${fmtTok(r.estimatedTotalTokens)} · ${fmtUsd(r.estimatedTotalCostUsd)}`
                 : r.usedPct != null
                   ? `${r.usedPct}%`
-                  : '--';
+                  : '--',
+            );
             return (
-              `<span class="wk-row-actual" style="grid-row:${rowNum}" title="${tip}">${fmtTok(r.actualTokens)} · ${fmtUsd(r.actualCostUsd)}</span>` +
+              `<span class="wk-row-actual" style="grid-row:${rowNum}" title="${tip}">${actualText}</span>` +
               `<span class="wk-row-est" style="grid-row:${rowNum}" title="${tip}">${estPart}</span>`
             );
           })
@@ -266,7 +277,7 @@
         const isSingle = rows.length === 1;
         return (
           `<div class="wk-group${isSingle ? ' is-single' : ''}">` +
-            `<span class="wk-group-label" style="grid-row:1 / span ${rows.length}">${g.label}</span>` +
+            `<span class="wk-group-label" style="grid-row:1 / span ${rows.length}">${escHtml(g.label)}</span>` +
             rowCells +
           `</div>`
         );

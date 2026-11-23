@@ -918,6 +918,7 @@ export function buildHudInjectExpression(snapshot, config) {
           for (var i = 0; i < frames.length; i++) {
             var src = String(frames[i].src || '').toLowerCase();
             if (src.indexOf('agy-hud') !== -1 || src.indexOf('agy_hud') !== -1) {
+              if (!isVisible(frames[i])) continue;
               var r = frames[i].getBoundingClientRect();
               if (r.width > 40 && r.height > 40) return true;
             }
@@ -1072,11 +1073,27 @@ export function buildHudInjectExpression(snapshot, config) {
 
           // 3. Sidebar is collapsed -> ALWAYS expand it first (collapsed DOM tabs may still have non-zero width)
           fireClick(toggleBtn);
-          setTimeout(function() {
-            if (!isCurrent()) return;
-            if (isAgyHudPanelActive()) return;
-            selectOrAddAgyHudTab();
-          }, 120);
+          waitUntil(
+            function() {
+              if (toggleBtn.getAttribute('aria-expanded') !== 'true') return null;
+              if (isAgyHudPanelActive()) return 'active';
+              if (
+                findExistingAgyHudTab() ||
+                findVisiblePluginMenuItem() ||
+                findVisibleExtCard() ||
+                findVisiblePlusBtn()
+              ) {
+                return 'ready';
+              }
+              return null;
+            },
+            function(status) {
+              if (status === 'active') return;
+              selectOrAddAgyHudTab();
+            },
+            1400,
+            45,
+          );
         }, 0);
       };
 

@@ -37,6 +37,43 @@ test('computeSpeedMetricsFromSteps computes per-turn and average tok/s accuratel
   assert.equal(metrics.sampleCount, 2);
 });
 
+test('computeSpeedMetricsFromSteps groups multi-call USER_INPUT turns for composite TPS and cache means', () => {
+  const steps = [
+    { type: 'USER_INPUT', created_at: '2026-11-23T10:00:00.000Z' },
+    {
+      type: 'PLANNER_RESPONSE',
+      model: 'gemini-4-neon-high',
+      input_tokens: 1000,
+      cache_read_tokens: 9000, // 90%
+      output_tokens: 400,
+      duration_sec: 2.0,
+    },
+    {
+      type: 'PLANNER_RESPONSE',
+      model: 'gemini-4-neon-high',
+      input_tokens: 500,
+      cache_read_tokens: 9500, // turn1 prompt=20000, cacheRead=18500 -> 92.5%; out=1200/6s -> 200 tok/s
+      output_tokens: 800,
+      duration_sec: 4.0,
+    },
+    { type: 'USER_INPUT', created_at: '2026-11-23T10:05:00.000Z' },
+    {
+      type: 'PLANNER_RESPONSE',
+      model: 'gemini-4-neon-high',
+      input_tokens: 2000,
+      cache_read_tokens: 8000, // turn2 cache=80.0%, out=500/5s -> 100 tok/s
+      output_tokens: 500,
+      duration_sec: 5.0,
+    },
+  ];
+
+  const metrics = computeSpeedMetricsFromSteps(steps);
+  assert.equal(metrics.latestTokPerSec, 100);
+  assert.equal(metrics.avgTokPerSec, 150); // (200 + 100) / 2
+  assert.equal(metrics.lastTurnCacheHitPct, 80);
+  assert.equal(metrics.avgCacheHitPct, 86.3); // (92.5 + 80.0) / 2 = 86.25 -> 86.3
+});
+
 test('matchModelToQuotaGroupKey maps Gemini, Claude/GPT, and Argon correctly', () => {
   assert.equal(matchModelToQuotaGroupKey('gemini-4-argon-high'), 'argon');
   assert.equal(matchModelToQuotaGroupKey('claude-sonnet-4-5'), 'gpt_claude');

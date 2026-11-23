@@ -367,11 +367,28 @@ export function buildPerTurnSummaries(validItems = [], userStepIdxs = []) {
     });
 }
 
+function averageRounded(items, selector, decimals = 1, requirePositive = false) {
+  let sum = 0;
+  let count = 0;
+  for (const item of items) {
+    const raw = selector(item);
+    if (raw == null) continue;
+    const val = Number(raw);
+    if (!Number.isFinite(val)) continue;
+    if (requirePositive && !(val > 0)) continue;
+    sum += val;
+    count += 1;
+  }
+  if (count === 0) return null;
+  const factor = 10 ** decimals;
+  return Math.round((sum / count) * factor) / factor;
+}
+
 /**
- * Derive live current-turn composite speed (updated as each LLM call in the turn finishes)
- * and across-turn session average speed (arithmetic mean over all turns in the conversation).
+ * Derive live current-turn composite speed & cache hit rate (updated as each LLM
+ * call in the turn finishes) and across-turn session arithmetic means over all turns.
  */
-export function summarizeTurnsSpeed(turns = []) {
+export function summarizeTurnsMetrics(turns = []) {
   if (!Array.isArray(turns) || turns.length === 0) {
     return {
       latestTokPerSec: null,
@@ -388,37 +405,9 @@ export function summarizeTurnsSpeed(turns = []) {
   }
 
   const lastTurn = turns[turns.length - 1];
-  const validTpsTurns = turns.filter((t) => Number.isFinite(Number(t?.tpsExact)) && Number(t.tpsExact) > 0);
-  const avgTokPerSec =
-    validTpsTurns.length > 0
-      ? Math.round(
-          (validTpsTurns.reduce((sum, t) => sum + Number(t.tpsExact), 0) / validTpsTurns.length) * 10,
-        ) / 10
-      : null;
-
-  const validTtftTurns = turns.filter(
-    (t) => Number.isFinite(Number(t?.avgTtftSec)) && Number(t.avgTtftSec) > 0,
-  );
-  const avgTtftSec =
-    validTtftTurns.length > 0
-      ? Math.round(
-          (validTtftTurns.reduce((sum, t) => sum + Number(t.avgTtftSec), 0) /
-            validTtftTurns.length) *
-            100,
-        ) / 100
-      : null;
-
-  const validCacheTurns = turns.filter(
-    (t) => t?.cacheHitPct != null && Number.isFinite(Number(t.cacheHitPct)),
-  );
-  const avgCacheHitPct =
-    validCacheTurns.length > 0
-      ? Math.round(
-          (validCacheTurns.reduce((sum, t) => sum + Number(t.cacheHitPct), 0) /
-            validCacheTurns.length) *
-            10,
-        ) / 10
-      : null;
+  const avgTokPerSec = averageRounded(turns, (t) => t?.tpsExact, 1, true);
+  const avgTtftSec = averageRounded(turns, (t) => t?.avgTtftSec, 2, true);
+  const avgCacheHitPct = averageRounded(turns, (t) => t?.cacheHitPct, 1, false);
 
   return {
     latestTokPerSec: lastTurn?.tpsExact ?? null,
@@ -436,6 +425,9 @@ export function summarizeTurnsSpeed(turns = []) {
     avgCacheHitPct,
   };
 }
+
+// Backward-compatible alias
+export const summarizeTurnsSpeed = summarizeTurnsMetrics;
 
 const dbMetricsCache = new Map();
 const MAX_CACHE_ENTRIES = 24;
@@ -520,7 +512,7 @@ export function readConversationSqliteMetrics(appData, convId) {
     const fallbackAvgRate = computePrimaryTps(sumOut, sumStream, sumTotDur);
     const fallbackAvgTtftSec = ttftCount > 0 ? Math.round((sumTtft / ttftCount) * 100) / 100 : null;
     const turns = buildPerTurnSummaries(validItems, userStepIdxs);
-    const turnSpeed = summarizeTurnsSpeed(turns);
+    const turnSpeed = summarizeTurnsMetrics(turns);
     const lastTurn = turns.length > 0 ? turns[turns.length - 1] : null;
     const sessionTotalTokens = turns.reduce((sum, t) => sum + Number(t.totalTokens || 0), 0);
     const sessionTotalCostUsd = Math.round(

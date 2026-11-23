@@ -405,3 +405,65 @@ test('buildWeeklyQuotaEstimates outputs 5 independent rows in order: Gemini(5h,w
   assert.equal(est.groups[2].rows[0].estimatedTotalTokens, 20_000_000);
   assert.equal(est.groups[2].rows[0].estimatedTotalCostUsd, 40);
 });
+
+test('buildWeeklyQuotaEstimates enforces canonical order, keeps Argon weekly-only, and returns null weekly totals when only 5h extrapolates', () => {
+  const nowMs = Date.parse('2026-11-23T12:00:00.000Z');
+  const fhResetIso = new Date(nowMs + 3 * 3600_000).toISOString();
+  const fhCutoffs = resolveFiveHourCutoffs(
+    {},
+    [{ key: 'gemini', fiveHour: { resetTime: fhResetIso } }],
+    nowMs,
+  );
+  assert.equal(fhCutoffs.gemini, Date.parse(fhResetIso) - FIVE_HOURS_MS);
+
+  const weeklyUsage = {
+    windowDays: 7,
+    scannedSessions: 2,
+    totalTokens: 1_000_000,
+    totalCostUsd: 2,
+    totalCacheSavedUsd: 0.5,
+    byGroup: {
+      gemini: { tokens: 1_000_000, costUsd: 2, cacheSavedUsd: 0.5, turns: 4 },
+    },
+    byGroupFiveHour: {
+      gemini: { tokens: 1_000_000, costUsd: 2, cacheSavedUsd: 0.5, turns: 4 },
+    },
+  };
+
+  // Deliberately unsorted input + Argon mistakenly carrying a fiveHour object;
+  // only Gemini 5h >= 1% used while all weekly buckets are < 1% used.
+  const est = buildWeeklyQuotaEstimates(
+    weeklyUsage,
+    [
+      {
+        key: 'argon',
+        label: 'Argon',
+        fiveHour: { remainingFraction: 0.8 },
+        weekly: { remainingFraction: 0.998 },
+      },
+      {
+        key: 'gpt_claude',
+        label: 'GPT&Claude',
+        fiveHour: { remainingFraction: 1.0 },
+        weekly: { remainingFraction: 1.0 },
+      },
+      {
+        key: 'gemini',
+        label: 'Gemini',
+        fiveHour: { remainingFraction: 0.90 }, // 10% used -> 5h extrapolates
+        weekly: { remainingFraction: 0.995 }, // 0.5% used -> weekly does NOT extrapolate
+      },
+    ],
+    {},
+  );
+
+  assert.deepEqual(
+    est.groups.map((g) => g.key),
+    ['gemini', 'gpt_claude', 'argon'],
+  );
+  assert.equal(est.groups[2].rows.length, 1);
+  assert.equal(est.groups[2].fiveHourEstimate, null);
+  assert.equal(est.hasExtrapolation, true);
+  assert.equal(est.estimatedCombinedWeeklyTokens, null);
+  assert.equal(est.estimatedCombinedWeeklyCostUsd, null);
+});
