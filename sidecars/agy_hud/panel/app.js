@@ -225,18 +225,49 @@
       return;
     }
 
-    const rows = groups
+    const windowTipMap = {
+      '5h': '5小时额度估算',
+      weekly: '周额度估算',
+    };
+
+    const groupBlocks = groups
       .map((g) => {
-        const estPart = g.estimatedTotalTokens != null
-          ? `≈ ${fmtTok(g.estimatedTotalTokens)} · ${fmtUsd(g.estimatedTotalCostUsd)}`
-          : g.weeklyUsedPct != null
-            ? `${g.weeklyUsedPct}%`
-            : '--';
+        const rows =
+          Array.isArray(g.rows) && g.rows.length > 0
+            ? g.rows
+            : [
+                {
+                  window: 'weekly',
+                  actualTokens: g.actualTokens7d,
+                  actualCostUsd: g.actualCostUsd7d,
+                  usedPct: g.weeklyUsedPct,
+                  estimatedTotalTokens: g.estimatedTotalTokens,
+                  estimatedTotalCostUsd: g.estimatedTotalCostUsd,
+                },
+              ];
+
+        const rowCells = rows
+          .map((r, idx) => {
+            const rowNum = idx + 1;
+            const tip = `${g.label} · ${windowTipMap[r.window] || '额度估算'}`;
+            const estPart =
+              r.estimatedTotalTokens != null
+                ? `≈ ${fmtTok(r.estimatedTotalTokens)} · ${fmtUsd(r.estimatedTotalCostUsd)}`
+                : r.usedPct != null
+                  ? `${r.usedPct}%`
+                  : '--';
+            return (
+              `<span class="wk-row-actual" style="grid-row:${rowNum}" title="${tip}">${fmtTok(r.actualTokens)} · ${fmtUsd(r.actualCostUsd)}</span>` +
+              `<span class="wk-row-est" style="grid-row:${rowNum}" title="${tip}">${estPart}</span>`
+            );
+          })
+          .join('');
+
+        const isSingle = rows.length === 1;
         return (
-          `<div class="wk-row">` +
-            `<span class="wk-row-label">${g.label}</span>` +
-            `<span class="wk-row-actual">${fmtTok(g.actualTokens7d)} · ${fmtUsd(g.actualCostUsd7d)}</span>` +
-            `<span class="wk-row-est">${estPart}</span>` +
+          `<div class="wk-group${isSingle ? ' is-single' : ''}">` +
+            `<span class="wk-group-label" style="grid-row:1 / span ${rows.length}">${g.label}</span>` +
+            rowCells +
           `</div>`
         );
       })
@@ -247,9 +278,9 @@
         <div class="wk-head">
           <span>额度类别</span>
           <span>已消耗</span>
-          <span>周额度估算</span>
+          <span>额度估算</span>
         </div>
-        ${rows}
+        ${groupBlocks}
       </div>
     `;
   }

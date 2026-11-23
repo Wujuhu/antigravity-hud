@@ -14,7 +14,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { findAppDataDirs } from './analyzer.mjs';
-import { SEVEN_DAYS_MS } from './quota_anchors.mjs';
+import {
+  FIVE_HOURS_MS,
+  SEVEN_DAYS_MS,
+  anchorKeyFor,
+} from './quota_anchors.mjs';
 
 export const MIN_USED_FRACTION_FOR_EXTRAPOLATION = 0.01; // >= 1% net quota change triggers estimation
 const MAX_USED_FRACTION_FOR_EXTRAPOLATION = 0.999;
@@ -246,8 +250,9 @@ function readTranscriptStepsCached(filePath) {
   }
 }
 
-export function resolveGroupCutoffs(anchors = {}, quotaGroups = [], nowMs = Date.now()) {
-  const defaultCutoff = nowMs - SEVEN_DAYS_MS;
+function resolveWindowCutoffs(anchors = {}, quotaGroups = [], windowKind = 'weekly', nowMs = Date.now()) {
+  const windowMs = windowKind === '5h' ? FIVE_HOURS_MS : SEVEN_DAYS_MS;
+  const defaultCutoff = nowMs - windowMs;
   const cutoffs = {
     gemini: defaultCutoff,
     gpt_claude: defaultCutoff,
@@ -257,28 +262,38 @@ export function resolveGroupCutoffs(anchors = {}, quotaGroups = [], nowMs = Date
   for (const grp of quotaGroups || []) {
     const key = grp?.key;
     if (!key) continue;
-    const anc = anchors?.[key];
+    const ancKey = anchorKeyFor(key, windowKind);
+    const anc = anchors?.[ancKey];
     if (anc && Number.isFinite(Number(anc.cycleStartMs)) && Number(anc.cycleStartMs) > 0) {
       cutoffs[key] = Number(anc.cycleStartMs);
       continue;
     }
-    const wk = grp?.weekly;
+    const bucket = windowKind === '5h' ? grp?.fiveHour : grp?.weekly;
     const resetMs =
-      wk && Number.isFinite(Number(wk.resetTimeMs)) && Number(wk.resetTimeMs) > 0
-        ? Number(wk.resetTimeMs)
-        : wk && Number.isFinite(Number(wk.remainingMs)) && Number(wk.remainingMs) > 0
-          ? nowMs + Number(wk.remainingMs)
+      bucket && Number.isFinite(Number(bucket.resetTimeMs)) && Number(bucket.resetTimeMs) > 0
+        ? Number(bucket.resetTimeMs)
+        : bucket && Number.isFinite(Number(bucket.remainingMs)) && Number(bucket.remainingMs) > 0
+          ? nowMs + Number(bucket.remainingMs)
           : null;
-    if (resetMs !== null && resetMs - SEVEN_DAYS_MS <= nowMs) {
-      cutoffs[key] = resetMs - SEVEN_DAYS_MS;
+    if (resetMs !== null && resetMs - windowMs <= nowMs) {
+      cutoffs[key] = resetMs - windowMs;
     }
   }
 
   return cutoffs;
 }
 
+export function resolveGroupCutoffs(anchors = {}, quotaGroups = [], nowMs = Date.now()) {
+  return resolveWindowCutoffs(anchors, quotaGroups, 'weekly', nowMs);
+}
+
+export function resolveFiveHourCutoffs(anchors = {}, quotaGroups = [], nowMs = Date.now()) {
+  return resolveWindowCutoffs(anchors, quotaGroups, '5h', nowMs);
+}
+
 /**
- * Scan local Antigravity brain directories aligned to per-group cycle anchors.
+ * Scan local Antigravity brain directories once and independently aggregate
+ * 5-hour and weekly consumption aligned to each bucket's own cycle anchor.
  */
 export function scanWeeklyLocalUsage({
   appDataDirs = null,
@@ -289,13 +304,18 @@ export function scanWeeklyLocalUsage({
   force = false,
 } = {}) {
   const groupCutoffs = resolveGroupCutoffs(anchors, quotaGroups, nowMs);
-  const cutoffSig = JSON.stringify(groupCutoffs);
+  const fiveHourCutoffs = resolveFiveHourCutoffs(anchors, quotaGroups, nowMs);
+  const cutoffSig = JSON.stringify({ w: groupCutoffs, f: fiveHourCutoffs });
   if (!force && !appDataDirs && cachedWeeklySnapshot && cachedWeeklySig === cutoffSig && nowMs - cachedWeeklyAtMs < ttlMs) {
     return cachedWeeklySnapshot;
   }
 
   const dirs = Array.isArray(appDataDirs) ? appDataDirs : findAppDataDirs();
-  const minCutoffMs = Math.min(nowMs - SEVEN_DAYS_MS, ...Object.values(groupCutoffs));
+  const minCutoffMs = Math.min(
+    nowMs - SEVEN_DAYS_MS,
+    ...Object.values(groupCutoffs),
+    ...Object.values(fiveHourCutoffs),
+  );
   const collectedSteps = [];
   let scannedSessions = 0;
 
@@ -331,11 +351,14 @@ export function scanWeeklyLocalUsage({
   }
 
   const agg = aggregateWeeklySteps(collectedSteps, nowMs - SEVEN_DAYS_MS, groupCutoffs);
+  const agg5h = aggregateWeeklySteps(collectedSteps, nowMs - FIVE_HOURS_MS, fiveHourCutoffs);
   const result = {
     windowDays: 7,
     scannedSessions,
     scannedAtMs: nowMs,
     groupCutoffs,
+    fiveHourCutoffs,
+    byGroupFiveHour: agg5h.byGroup,
     ...agg,
   };
 
@@ -361,63 +384,104 @@ function resolvePreciseFraction(wk) {
   return null;
 }
 
+function computeBucketQuotaEstimate({ actual, bucket, anchor, windowKind }) {
+  const currentFrac = resolvePreciseFraction(bucket);
+  const anchorFrac =
+    anchor && Number.isFinite(Number(anchor.anchorFraction))
+      ? Math.max(0, Math.min(1, Number(anchor.anchorFraction)))
+      : 1.0;
+
+  const deltaUsedFrac =
+    currentFrac !== null
+      ? Math.max(0, Math.min(1, anchorFrac - currentFrac))
+      : null;
+
+  let estimatedTotalTokens = null;
+  let estimatedTotalCostUsd = null;
+  let confidence = 'insufficient';
+
+  if (
+    deltaUsedFrac !== null &&
+    deltaUsedFrac >= MIN_USED_FRACTION_FOR_EXTRAPOLATION &&
+    deltaUsedFrac <= MAX_USED_FRACTION_FOR_EXTRAPOLATION &&
+    actual.tokens > 0
+  ) {
+    estimatedTotalTokens = Math.round(actual.tokens / deltaUsedFrac);
+    estimatedTotalCostUsd = Number((actual.costUsd / deltaUsedFrac).toFixed(2));
+    confidence = deltaUsedFrac >= 0.1 ? 'high' : deltaUsedFrac >= 0.03 ? 'medium' : 'low';
+  }
+
+  const deltaUsedPctExact =
+    deltaUsedFrac !== null ? Number((deltaUsedFrac * 100).toFixed(1)) : null;
+
+  return {
+    window: windowKind,
+    actualTokens: actual.tokens || 0,
+    actualCostUsd: Number(Number(actual.costUsd || 0).toFixed(2)),
+    remainingPct: currentFrac !== null ? Number((currentFrac * 100).toFixed(1)) : null,
+    usedPct: deltaUsedPctExact,
+    deltaUsedFraction: deltaUsedFrac !== null ? Number(deltaUsedFrac.toFixed(6)) : null,
+    anchorFraction: anchorFrac,
+    anchorReason: anchor?.reason || 'natural_window',
+    estimatedTotalTokens,
+    estimatedTotalCostUsd,
+    confidence,
+  };
+}
+
 /**
  * Combine cycle-aligned local consumption with high-precision floating-point
  * quota deltas (`deltaUsed = anchorFraction - currentFraction`) to extrapolate
- * estimated full weekly token & USD capacity per group.
+ * estimated 5h and weekly token & USD capacity independently per group.
  *
  * Triggers whenever net quota change >= 1% (`deltaUsed >= 0.01`).
  */
 export function buildWeeklyQuotaEstimates(weeklyUsage, quotaGroups = [], anchors = {}) {
-  const byGroup = weeklyUsage?.byGroup || {};
+  const byGroupWeekly = weeklyUsage?.byGroup || {};
+  const byGroupFiveHour = weeklyUsage?.byGroupFiveHour || {};
   const groupEstimates = [];
 
   for (const grp of quotaGroups || []) {
-    const actual = byGroup[grp.key] || { tokens: 0, costUsd: 0, cacheSavedUsd: 0, turns: 0 };
-    const wk = grp.weekly;
-    const currentFrac = resolvePreciseFraction(wk);
-    const anc = anchors?.[grp.key] || null;
-    const anchorFrac =
-      anc && Number.isFinite(Number(anc.anchorFraction))
-        ? Math.max(0, Math.min(1, Number(anc.anchorFraction)))
-        : 1.0;
+    const emptyActual = { tokens: 0, costUsd: 0, cacheSavedUsd: 0, turns: 0 };
+    const actualWeekly = byGroupWeekly[grp.key] || emptyActual;
+    const actualFiveHour = byGroupFiveHour[grp.key] || emptyActual;
 
-    const deltaUsedFrac =
-      currentFrac !== null
-        ? Math.max(0, Math.min(1, anchorFrac - currentFrac))
-        : null;
+    const wkEst = computeBucketQuotaEstimate({
+      actual: actualWeekly,
+      bucket: grp.weekly,
+      anchor: anchors?.[anchorKeyFor(grp.key, 'weekly')] || null,
+      windowKind: 'weekly',
+    });
 
-    let estimatedTotalTokens = null;
-    let estimatedTotalCostUsd = null;
-    let confidence = 'insufficient';
+    const hasFiveHour = Boolean(grp.fiveHour) || grp.key === 'gemini' || grp.key === 'gpt_claude';
+    const fhEst = hasFiveHour
+      ? computeBucketQuotaEstimate({
+          actual: actualFiveHour,
+          bucket: grp.fiveHour || null,
+          anchor: anchors?.[anchorKeyFor(grp.key, '5h')] || null,
+          windowKind: '5h',
+        })
+      : null;
 
-    if (
-      deltaUsedFrac !== null &&
-      deltaUsedFrac >= MIN_USED_FRACTION_FOR_EXTRAPOLATION &&
-      deltaUsedFrac <= MAX_USED_FRACTION_FOR_EXTRAPOLATION &&
-      actual.tokens > 0
-    ) {
-      estimatedTotalTokens = Math.round(actual.tokens / deltaUsedFrac);
-      estimatedTotalCostUsd = Number((actual.costUsd / deltaUsedFrac).toFixed(2));
-      confidence = deltaUsedFrac >= 0.1 ? 'high' : deltaUsedFrac >= 0.03 ? 'medium' : 'low';
-    }
-
-    const deltaUsedPctExact =
-      deltaUsedFrac !== null ? Number((deltaUsedFrac * 100).toFixed(1)) : null;
+    // Row order: Gemini -> [5h, weekly]; GPT&Claude -> [5h, weekly]; Argon -> [weekly]
+    const rows = fhEst ? [fhEst, wkEst] : [wkEst];
 
     groupEstimates.push({
       key: grp.key,
       label: grp.label,
-      actualTokens7d: actual.tokens,
-      actualCostUsd7d: Number(Number(actual.costUsd || 0).toFixed(2)),
-      weeklyRemainingPct: currentFrac !== null ? Number((currentFrac * 100).toFixed(1)) : null,
-      weeklyUsedPct: deltaUsedPctExact,
-      deltaUsedFraction: deltaUsedFrac !== null ? Number(deltaUsedFrac.toFixed(6)) : null,
-      anchorFraction: anchorFrac,
-      anchorReason: anc?.reason || 'natural_window',
-      estimatedTotalTokens,
-      estimatedTotalCostUsd,
-      confidence,
+      actualTokens7d: wkEst.actualTokens,
+      actualCostUsd7d: wkEst.actualCostUsd,
+      weeklyRemainingPct: wkEst.remainingPct,
+      weeklyUsedPct: wkEst.usedPct,
+      deltaUsedFraction: wkEst.deltaUsedFraction,
+      anchorFraction: wkEst.anchorFraction,
+      anchorReason: wkEst.anchorReason,
+      estimatedTotalTokens: wkEst.estimatedTotalTokens,
+      estimatedTotalCostUsd: wkEst.estimatedTotalCostUsd,
+      confidence: wkEst.confidence,
+      fiveHourEstimate: fhEst,
+      weeklyEstimate: wkEst,
+      rows,
     });
   }
 
@@ -430,7 +494,11 @@ export function buildWeeklyQuotaEstimates(weeklyUsage, quotaGroups = [], anchors
       .reduce((sum, item) => sum + (item.estimatedTotalCostUsd || 0), 0)
       .toFixed(2),
   );
-  const hasExtrapolation = groupEstimates.some((item) => item.estimatedTotalTokens !== null);
+  const hasExtrapolation = groupEstimates.some(
+    (item) =>
+      item.estimatedTotalTokens !== null ||
+      (item.fiveHourEstimate && item.fiveHourEstimate.estimatedTotalTokens !== null),
+  );
 
   return {
     windowDays: weeklyUsage?.windowDays || 7,

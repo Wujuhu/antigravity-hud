@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  FIVE_HOURS_MS,
   SEVEN_DAYS_MS,
+  anchorKeyFor,
   updateAnchorsFromQuotaGroups,
 } from '../sidecars/agy_hud/backend/quota_anchors.mjs';
 import {
@@ -10,6 +12,8 @@ import {
   buildWeeklyQuotaEstimates,
   estimateTurnCostUsd,
   normalizeModelRateKey,
+  resolveFiveHourCutoffs,
+  resolveGroupCutoffs,
   resolveModelRates,
 } from '../sidecars/agy_hud/backend/weekly_usage.mjs';
 
@@ -235,4 +239,169 @@ test('quota anchors simultaneously handle natural resets, official manual resets
   assert.equal(step4.anchors.gemini.cycleStartMs, firstUseAfterNatural);
   assert.equal(step4.anchors.gemini.anchorFraction, 1.0);
   assert.equal(step4.anchors.gemini.reason, 'natural_reset');
+});
+
+test('5h and weekly anchors stay strictly isolated so neither reset can affect the other', () => {
+  const t0 = Date.parse('2026-11-23T08:00:00.000Z');
+  const wkReset0 = t0 + 5 * 24 * 3600_000;
+  const fhReset0 = t0 + 2 * 3600_000;
+
+  // 1. Initial observation with both 5h and weekly active
+  const s1 = updateAnchorsFromQuotaGroups(
+    {},
+    [
+      {
+        key: 'gemini',
+        fiveHour: { remainingFraction: 0.70, resetTimeMs: fhReset0 },
+        weekly: { remainingFraction: 0.50, resetTimeMs: wkReset0 },
+      },
+      {
+        key: 'argon',
+        fiveHour: null,
+        weekly: { remainingFraction: 0.90, resetTimeMs: wkReset0 },
+      },
+    ],
+    t0,
+  );
+  const wkKey = anchorKeyFor('gemini', 'weekly');
+  const fhKey = anchorKeyFor('gemini', '5h');
+  assert.equal(wkKey, 'gemini');
+  assert.equal(fhKey, 'gemini:5h');
+  assert.equal(s1.anchors[wkKey].cycleStartMs, wkReset0 - SEVEN_DAYS_MS);
+  assert.equal(s1.anchors[fhKey].cycleStartMs, fhReset0 - FIVE_HOURS_MS);
+  assert.equal(s1.anchors['argon:5h'], undefined);
+
+  // 2. 5h bucket resets to 100% and re-activates, while weekly has a minor +1.5% bounce
+  const t1 = fhReset0 + 5 * 60_000;
+  const s2 = updateAnchorsFromQuotaGroups(
+    s1.anchors,
+    [
+      {
+        key: 'gemini',
+        fiveHour: { remainingFraction: 1.0, resetTimeMs: null },
+        weekly: { remainingFraction: 0.515, resetTimeMs: wkReset0 },
+      },
+    ],
+    t1,
+  );
+  assert.equal(s2.anchors[fhKey].idleFull, true);
+  assert.equal(s2.anchors[fhKey].reason, 'natural_reset');
+  // Weekly anchor MUST remain completely untouched!
+  assert.equal(s2.anchors[wkKey].cycleStartMs, wkReset0 - SEVEN_DAYS_MS);
+  assert.equal(s2.anchors[wkKey].anchorFraction, 1.0);
+  assert.equal(s2.anchors[wkKey].reason, 'natural_window');
+
+  // 2b. First 5h consumption starts new 5h cycle without touching weekly cycle
+  const t2 = t1 + 10 * 60_000;
+  const fhReset1 = t2 + FIVE_HOURS_MS;
+  const s3 = updateAnchorsFromQuotaGroups(
+    s2.anchors,
+    [
+      {
+        key: 'gemini',
+        fiveHour: { remainingFraction: 0.95, resetTimeMs: fhReset1 },
+        weekly: { remainingFraction: 0.49, resetTimeMs: wkReset0 },
+      },
+    ],
+    t2 + 15_000,
+  );
+  assert.equal(s3.anchors[fhKey].cycleStartMs, t2);
+  assert.equal(s3.anchors[fhKey].reason, 'cycle_activated');
+  assert.equal(s3.anchors[wkKey].cycleStartMs, wkReset0 - SEVEN_DAYS_MS);
+  assert.equal(s3.anchors[wkKey].anchorFraction, 1.0);
+
+  // 3. Weekly bucket undergoes an official early manual reset -> 5h anchor MUST remain untouched!
+  const t3 = t2 + 30 * 60_000;
+  const s4 = updateAnchorsFromQuotaGroups(
+    s3.anchors,
+    [
+      {
+        key: 'gemini',
+        fiveHour: { remainingFraction: 0.90, resetTimeMs: fhReset1 },
+        weekly: { remainingFraction: 1.0, resetTimeMs: null },
+      },
+    ],
+    t3,
+  );
+  assert.equal(s4.anchors[wkKey].idleFull, true);
+  assert.equal(s4.anchors[wkKey].reason, 'manual_reset');
+  assert.equal(s4.anchors[fhKey].cycleStartMs, t2);
+  assert.equal(s4.anchors[fhKey].anchorFraction, 1.0);
+  assert.equal(s4.anchors[fhKey].lastFraction, 0.9);
+
+  // Verify independent cutoff resolvers
+  const wkCutoffs = resolveGroupCutoffs(s3.anchors, [{ key: 'gemini' }], t2 + 60_000);
+  const fhCutoffs = resolveFiveHourCutoffs(s3.anchors, [{ key: 'gemini' }], t2 + 60_000);
+  assert.equal(wkCutoffs.gemini, wkReset0 - SEVEN_DAYS_MS);
+  assert.equal(fhCutoffs.gemini, t2);
+});
+
+test('buildWeeklyQuotaEstimates outputs 5 independent rows in order: Gemini(5h,wk), GPT&Claude(5h,wk), Argon(wk)', () => {
+  const weeklyUsage = {
+    windowDays: 7,
+    scannedSessions: 6,
+    totalTokens: 25_000_000,
+    totalCostUsd: 50,
+    totalCacheSavedUsd: 20,
+    byGroup: {
+      gemini: { tokens: 20_000_000, costUsd: 40, cacheSavedUsd: 15, turns: 100 },
+      gpt_claude: { tokens: 4_000_000, costUsd: 8, cacheSavedUsd: 4, turns: 20 },
+      argon: { tokens: 1_000_000, costUsd: 2, cacheSavedUsd: 1, turns: 5 },
+    },
+    byGroupFiveHour: {
+      gemini: { tokens: 2_000_000, costUsd: 4, cacheSavedUsd: 2, turns: 12 },
+      gpt_claude: { tokens: 200_000, costUsd: 0.5, cacheSavedUsd: 0.1, turns: 2 },
+      argon: { tokens: 0, costUsd: 0, cacheSavedUsd: 0, turns: 0 },
+    },
+  };
+
+  const quotaGroups = [
+    {
+      key: 'gemini',
+      label: 'Gemini',
+      fiveHour: { remainingFraction: 0.90 }, // 10% used -> 2M / 0.10 = 20M, $4 / 0.10 = $40
+      weekly: { remainingFraction: 0.60 }, // 40% used -> 20M / 0.40 = 50M, $40 / 0.40 = $100
+    },
+    {
+      key: 'gpt_claude',
+      label: 'GPT&Claude',
+      fiveHour: { remainingFraction: 0.995 }, // 0.5% used (< 1%) -> null estimate, usedPct 0.5
+      weekly: { remainingFraction: 0.90 }, // 10% used -> 4M / 0.10 = 40M, $8 / 0.10 = $80
+    },
+    {
+      key: 'argon',
+      label: 'Argon',
+      fiveHour: null,
+      weekly: { remainingFraction: 0.95 }, // 5% used -> 1M / 0.05 = 20M, $2 / 0.05 = $40
+    },
+  ];
+
+  const est = buildWeeklyQuotaEstimates(weeklyUsage, quotaGroups, {});
+  assert.equal(est.groups.length, 3);
+
+  // Gemini: [5h, weekly]
+  assert.equal(est.groups[0].rows.length, 2);
+  assert.equal(est.groups[0].rows[0].window, '5h');
+  assert.equal(est.groups[0].rows[0].actualTokens, 2_000_000);
+  assert.equal(est.groups[0].rows[0].estimatedTotalTokens, 20_000_000);
+  assert.equal(est.groups[0].rows[0].estimatedTotalCostUsd, 40);
+  assert.equal(est.groups[0].rows[1].window, 'weekly');
+  assert.equal(est.groups[0].rows[1].actualTokens, 20_000_000);
+  assert.equal(est.groups[0].rows[1].estimatedTotalTokens, 50_000_000);
+  assert.equal(est.groups[0].rows[1].estimatedTotalCostUsd, 100);
+
+  // GPT&Claude: [5h (<1%), weekly]
+  assert.equal(est.groups[1].rows.length, 2);
+  assert.equal(est.groups[1].rows[0].window, '5h');
+  assert.equal(est.groups[1].rows[0].usedPct, 0.5);
+  assert.equal(est.groups[1].rows[0].estimatedTotalTokens, null);
+  assert.equal(est.groups[1].rows[1].window, 'weekly');
+  assert.equal(est.groups[1].rows[1].estimatedTotalTokens, 40_000_000);
+  assert.equal(est.groups[1].rows[1].estimatedTotalCostUsd, 80);
+
+  // Argon: [weekly]
+  assert.equal(est.groups[2].rows.length, 1);
+  assert.equal(est.groups[2].rows[0].window, 'weekly');
+  assert.equal(est.groups[2].rows[0].estimatedTotalTokens, 20_000_000);
+  assert.equal(est.groups[2].rows[0].estimatedTotalCostUsd, 40);
 });
