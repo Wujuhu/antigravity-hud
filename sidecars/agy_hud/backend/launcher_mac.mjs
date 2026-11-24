@@ -181,6 +181,64 @@ async function createMacDesktopShortcut({
   }
 }
 
+export function detectMacCdpLauncher({
+  applicationsDir = '',
+  desktopDir = path.join(os.homedir(), 'Desktop'),
+  bundleName = 'Antigravity (HUD)',
+  port = DEFAULT_CDP_PORT,
+  targetAppOverride = '',
+} = {}) {
+  const p = Number(port) || DEFAULT_CDP_PORT;
+  const detected = targetAppOverride
+    ? { appPath: targetAppOverride, found: fs.existsSync(targetAppOverride) }
+    : findMacAntigravityApp();
+
+  const candidateDirs = applicationsDir
+    ? [applicationsDir]
+    : ['/Applications', path.join(os.homedir(), 'Applications')];
+
+  let bundlePath = '';
+  for (const dir of candidateDirs) {
+    const cand = path.join(dir, `${bundleName}.app`);
+    const scriptCand = path.join(cand, 'Contents', 'MacOS', 'launcher');
+    try {
+      if (fs.existsSync(cand) && fs.existsSync(scriptCand)) {
+        bundlePath = cand;
+        break;
+      }
+    } catch {
+      // ignore probe errors
+    }
+  }
+
+  let desktopShortcutPath = '';
+  if (desktopDir) {
+    for (const name of [bundleName, `${bundleName}.app`]) {
+      const cand = path.join(desktopDir, name);
+      try {
+        if (fs.existsSync(cand)) {
+          desktopShortcutPath = cand;
+          break;
+        }
+      } catch {
+        // ignore probe errors
+      }
+    }
+  }
+
+  return {
+    platform: 'darwin',
+    port: p,
+    exists: Boolean(bundlePath),
+    launcherPath: bundlePath,
+    bundlePath,
+    desktopShortcutPath,
+    targetAppPath: detected.appPath,
+    targetAppFound: detected.found,
+    manualCommand: `open -a "${detected.appPath}" --args --remote-debugging-port=${p}`,
+  };
+}
+
 export async function generateMacCdpLauncher({
   applicationsDir = '',
   desktopDir = path.join(os.homedir(), 'Desktop'),

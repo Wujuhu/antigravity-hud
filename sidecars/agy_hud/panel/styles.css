@@ -811,27 +811,38 @@ select option {
   color: var(--muted);
 }
 
-.cdp-success {
-  margin-top: 2px;
+.cdp-path-box {
+  margin-top: 8px;
   padding: 7px 9px;
   border-radius: 7px;
-  background: var(--ok-bg);
-  border: 1px solid var(--ok-border);
+  background: var(--control-bg);
+  border: 1px solid var(--hairline);
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.cdp-success-msg {
+.cdp-path-box.is-regenerated {
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+}
+
+.cdp-path-label {
   font-size: 11px;
-  color: var(--ok);
+  color: var(--text-soft);
   line-height: 1.4;
+}
+
+.cdp-path-box.is-regenerated .cdp-path-label {
+  color: var(--ok);
 }
 
 .path-note {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10px;
-  color: var(--text-soft);
+  font-size: 10.5px;
+  color: var(--text);
   word-break: break-all;
-  line-height: 1.4;
+  line-height: 1.45;
+  user-select: all;
+  cursor: text;
 }

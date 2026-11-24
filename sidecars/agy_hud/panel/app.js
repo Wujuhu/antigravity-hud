@@ -296,24 +296,83 @@
     `;
   }
 
-  function buildCdpAlertMessage(platform, port) {
-    if (platform === 'darwin') {
-      return '当前未处于 CDP 注入状态。请点击下方生成启动器，按 Cmd+Q 彻底退出 Antigravity 后，打开 /Applications/Antigravity (HUD).app（或桌面快捷方式）重新启动。';
-    }
-    if (platform === 'win32') {
-      return '当前未处于 CDP 注入状态。请点击下方生成启动器，彻底退出 Antigravity（含右下角托盘图标）后，双击桌面 Antigravity (HUD).lnk 重新启动。';
-    }
-    return `当前未处于 CDP 注入状态。请彻底退出 Antigravity 后，使用带 --remote-debugging-port=${port || 9229} 参数的命令重新启动。`;
-  }
+  function buildCdpRepairCopy(platform, port, launcherStatus, launcherInfo) {
+    const exitHint =
+      platform === 'darwin'
+        ? '请按 Cmd+Q 彻底退出 Antigravity'
+        : platform === 'win32'
+          ? '请彻底退出 Antigravity（含右下角托盘图标）'
+          : '请彻底退出 Antigravity';
 
-  function buildLauncherSuccessMessage(platform) {
-    if (platform === 'darwin') {
-      return '已生成 macOS 启动器。请按 Cmd+Q 彻底退出 Antigravity，再打开下方 .app 应用重新启动：';
+    const status = launcherStatus?.status || '';
+    const fullPath =
+      launcherStatus?.launcherPath ||
+      launcherInfo?.lnkPath ||
+      launcherInfo?.bundlePath ||
+      '';
+    const manualCmd =
+      launcherStatus?.manualCommand ||
+      launcherInfo?.manualCommand ||
+      `antigravity --remote-debugging-port=${port || 9229}`;
+
+    if (status === 'disabled') {
+      return {
+        alert: '已在设置中暂停 CDP 注入，当前不显示输入栏 HUD。',
+        pathLabel: '',
+        pathValue: '',
+        regenerated: false,
+        showRetry: false,
+      };
     }
-    if (platform === 'win32') {
-      return '已生成 Windows 启动器。请彻底退出 Antigravity（含托盘图标），再双击下方快捷方式重新启动：';
+
+    if (status === 'auto_regenerated' && fullPath) {
+      return {
+        alert: `当前未处于 CDP 注入状态，且检测到原 HUD 启动器已被删除。已自动为您重新生成启动器，${exitHint}，再使用下方完整路径的启动器重新启动。`,
+        pathLabel: '已自动重新生成启动器（完整路径）',
+        pathValue: fullPath,
+        regenerated: true,
+        showRetry: false,
+      };
     }
-    return '已生成启动命令。请彻底退出 Antigravity 后使用下方命令重新启动：';
+
+    if (status === 'existing' && fullPath) {
+      return {
+        alert: `当前未处于 CDP 注入状态，检测到本地 HUD 启动器未删除（当前可能从官方启动器打开）。${exitHint}，再使用下方完整路径的启动器重新启动。`,
+        pathLabel: 'HUD 启动器完整路径',
+        pathValue: fullPath,
+        regenerated: false,
+        showRetry: false,
+      };
+    }
+
+    if (status === 'manual_only') {
+      return {
+        alert: `当前未处于 CDP 注入状态。${exitHint}后，使用下方带调试端口参数的命令重新启动。`,
+        pathLabel: '启动命令',
+        pathValue: manualCmd,
+        regenerated: false,
+        showRetry: false,
+      };
+    }
+
+    if (status === 'generate_failed') {
+      const reason = launcherStatus?.error ? `（${launcherStatus.error}）` : '';
+      return {
+        alert: `当前未处于 CDP 注入状态，检测到 HUD 启动器缺失且自动生成失败${reason}。可点击下方重试，或使用命令行启动。`,
+        pathLabel: manualCmd ? '备用启动命令' : '',
+        pathValue: manualCmd,
+        regenerated: false,
+        showRetry: true,
+      };
+    }
+
+    return {
+      alert: `当前未处于 CDP 注入状态。${exitHint}后，使用 HUD 启动器重新启动。`,
+      pathLabel: fullPath ? 'HUD 启动器完整路径' : '',
+      pathValue: fullPath,
+      regenerated: false,
+      showRetry: !fullPath,
+    };
   }
 
   function render() {
@@ -323,6 +382,7 @@
       cdpStatus,
       platform,
       launcherInfo,
+      launcherStatus,
       catalogs,
       snapshot,
       weeklyComputedAtMs,
@@ -334,6 +394,10 @@
     const badge = $('cdpStateText');
     const repairArea = $('cdpRepairArea');
     const alertEl = $('cdpAlertText');
+    const pathBox = $('cdpPathBox');
+    const pathLabel = $('cdpPathLabel');
+    const pathValue = $('cdpPathValue');
+    const retryFoot = $('cdpRetryFoot');
     const isConnected = Boolean(cdpStatus?.connected);
 
     dot.classList.toggle('is-ok', isConnected);
@@ -344,27 +408,30 @@
     if (isConnected) {
       badge.textContent = '正常';
       repairArea.hidden = true;
+      pathBox.hidden = true;
+      retryFoot.hidden = true;
     } else {
       badge.textContent = '异常';
       repairArea.hidden = false;
-      alertEl.textContent = buildCdpAlertMessage(platform, config?.cdpPort);
-    }
+      const copy = buildCdpRepairCopy(platform, config?.cdpPort, launcherStatus, launcherInfo);
+      alertEl.textContent = copy.alert;
 
-    $('btnGenerateLauncherLabel').textContent =
-      platform === 'win32'
-        ? '生成 Windows 启动器 (.lnk)'
-        : platform === 'darwin'
-          ? '生成 macOS 启动器 (.app)'
-          : '显示启动命令';
+      if (copy.pathValue) {
+        pathBox.hidden = false;
+        pathBox.classList.toggle('is-regenerated', Boolean(copy.regenerated));
+        pathLabel.textContent = copy.pathLabel;
+        pathValue.textContent = copy.pathValue;
+      } else {
+        pathBox.hidden = true;
+      }
 
-    if (launcherInfo && !isConnected) {
-      const box = $('launcherResultBox');
-      box.hidden = false;
-      $('launcherResultMsg').textContent = buildLauncherSuccessMessage(platform);
-      $('launcherResult').textContent =
-        launcherInfo.lnkPath || launcherInfo.bundlePath || launcherInfo.manualCommand || '';
-    } else {
-      $('launcherResultBox').hidden = true;
+      retryFoot.hidden = !copy.showRetry;
+      $('btnGenerateLauncherLabel').textContent =
+        platform === 'win32'
+          ? '重新生成 Windows 启动器 (.lnk)'
+          : platform === 'darwin'
+            ? '重新生成 macOS 启动器 (.app)'
+            : '重新检测启动命令';
     }
 
     $('versionBadge').textContent = `v${currentVersion || '1.0.0'}`;

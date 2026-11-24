@@ -104,6 +104,45 @@ export async function createWindowsShortcutLnk({
   }
 }
 
+export function detectWindowsCdpLauncher({
+  dataDir = '',
+  desktopDir = path.join(os.homedir(), 'Desktop'),
+  port = DEFAULT_CDP_PORT,
+  exePathOverride = '',
+} = {}) {
+  const p = Number(port) || DEFAULT_CDP_PORT;
+  const detected = exePathOverride
+    ? { exePath: exePathOverride, found: fs.existsSync(exePathOverride) }
+    : findWindowsAntigravityExe();
+  const desktopLnkPath = desktopDir ? path.join(desktopDir, 'Antigravity (HUD).lnk') : '';
+  const fallbackLnkPath = dataDir ? path.join(dataDir, 'launchers', 'Antigravity (HUD).lnk') : '';
+
+  const desktopDirExists = Boolean(desktopDir && fs.existsSync(desktopDir));
+  const desktopLnkExists = Boolean(desktopLnkPath && fs.existsSync(desktopLnkPath));
+  const fallbackLnkExists = Boolean(fallbackLnkPath && fs.existsSync(fallbackLnkPath));
+
+  // On normal Windows desktops, treat Desktop shortcut as the primary launcher
+  // so deleting it from Desktop is accurately detected and regenerated.
+  const exists = desktopDirExists ? desktopLnkExists : fallbackLnkExists;
+  const launcherPath = desktopDirExists
+    ? desktopLnkPath
+    : fallbackLnkExists
+      ? fallbackLnkPath
+      : desktopLnkPath || fallbackLnkPath;
+
+  return {
+    platform: 'win32',
+    port: p,
+    exists,
+    launcherPath,
+    desktopLnkPath,
+    fallbackLnkPath,
+    exePath: detected.exePath,
+    exeFound: detected.found,
+    manualCommand: `"${detected.exePath}" --remote-debugging-port=${p}`,
+  };
+}
+
 export async function generateWindowsCdpLauncher({
   dataDir,
   desktopDir = path.join(os.homedir(), 'Desktop'),
