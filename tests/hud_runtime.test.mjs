@@ -60,6 +60,7 @@ test('HUD inject and remove expressions parse cleanly as valid JavaScript', () =
   assert.doesNotMatch(injectExpr, /agy-turn-item">缓存 /);
   assert.match(injectExpr, /data-agy-action="open-sidecar"/);
   assert.match(injectExpr, /: 0\) \+ ' tok\/s'/);
+  assert.doesNotMatch(injectExpr, /latestTokPerSec == null \? ' agy-hud-muted'/);
   // Ensure custom order is embedded in payload
   assert.ok(injectExpr.indexOf('"id":"quota"') < injectExpr.indexOf('"id":"context"'));
 });
