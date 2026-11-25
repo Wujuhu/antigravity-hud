@@ -2,7 +2,7 @@
   "name": "agy-hud",
   "displayName": "AGY HUD",
   "description": "Minimal Antigravity composer HUD displaying customizable live context, token usage, generation speed, cache hit rate, and quota with hover breakdown cards.",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "logo": "assets/logo.svg",
   "suggestedPrompts": [
     "打开 AGY HUD 设置面板查看实时遥测与排序配置",
