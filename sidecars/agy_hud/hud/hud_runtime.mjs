@@ -650,7 +650,7 @@ export function buildHudInjectExpression(snapshot, config) {
             '</span>'
           );
         } else if (id === 'speed') {
-          var sVal = spd.latestTokPerSec != null ? Math.round(spd.latestTokPerSec) + ' tok/s' : '--';
+          var sVal = (spd.latestTokPerSec != null ? Math.round(spd.latestTokPerSec) : 0) + ' tok/s';
           segments.push('<span class="agy-hud-seg' + (spd.latestTokPerSec == null ? ' agy-hud-muted' : '') + '">' + esc(sVal) + '</span>');
         } else if (id === 'quota') {
           if (qta.available && qta.activeFiveHourPct != null) {
