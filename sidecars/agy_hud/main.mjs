@@ -38,6 +38,10 @@ import {
   checkForUpdates,
   readInstalledVersion,
 } from './backend/updater.mjs';
+import {
+  RATE_SYNC_INTERVAL_MS,
+  createRateSyncStore,
+} from './backend/rate_sync.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = join(__dirname, '..', '..');
@@ -48,6 +52,8 @@ const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const configStore = createConfigStore();
 const quotaClient = createQuotaClient();
 const quotaAnchorStore = createQuotaAnchorStore(configStore.dataDir);
+const rateSyncStore = createRateSyncStore(configStore.dataDir);
+rateSyncStore.loadCachedSync();
 const launcherReconciler = createLauncherReconciler({
   platform: process.platform,
   dataDir: configStore.dataDir,
@@ -79,6 +85,7 @@ let latestUpdateStatus = {
 let syncInFlight = false;
 let pollTimer = null;
 let updateTimer = null;
+let rateSyncTimer = null;
 
 async function syncOnce({ forceQuota = false } = {}) {
   if (syncInFlight) return latestSnapshot;
@@ -244,6 +251,14 @@ async function runApplyUpdate() {
   }
 }
 
+function restartRateSyncLoop() {
+  if (rateSyncTimer) clearInterval(rateSyncTimer);
+  rateSyncTimer = setInterval(() => {
+    rateSyncStore.syncRates({ force: false }).catch(() => {});
+  }, RATE_SYNC_INTERVAL_MS);
+  rateSyncTimer.unref?.();
+}
+
 function restartUpdateLoop() {
   if (updateTimer) clearInterval(updateTimer);
   const cfg = configStore.get();
@@ -308,6 +323,7 @@ function buildStatePayload({ includeWeekly = false, forceWeekly = false } = {}) 
     cdpStatus: latestCdpStatus,
     launcherInfo: latestLauncherInfo,
     launcherStatus: latestLauncherStatus,
+    rateSyncStatus: rateSyncStore.getStatus(),
     updateStatus: latestUpdateStatus,
     catalogs: {
       pillItems: PILL_ITEM_CATALOG,
@@ -359,8 +375,12 @@ async function handleApiRequest(method, urlPath, bodyObj = {}, queryConvId = '')
   }
 
   if (method === 'POST' && urlPath === '/api/update/check') {
-    await runUpdateCheck({ allowAutoApply: false });
-    return buildStatePayload({ includeWeekly: true });
+    await Promise.all([
+      runUpdateCheck({ allowAutoApply: false }),
+      rateSyncStore.syncRates({ force: true }).catch(() => {}),
+    ]);
+    await syncOnce();
+    return buildStatePayload({ includeWeekly: true, forceWeekly: true });
   }
 
   if (method === 'POST' && urlPath === '/api/update/apply') {
@@ -388,13 +408,15 @@ async function handleApiRequest(method, urlPath, bodyObj = {}, queryConvId = '')
 async function start() {
   restartPollingLoop();
   restartUpdateLoop();
+  restartRateSyncLoop();
   syncOnce().catch(() => {});
   const initCfg = configStore.get();
-  if (initCfg.autoCheckUpdate && (initCfg.updateRepoSlug || DEFAULT_UPDATE_REPO_SLUG)) {
-    setTimeout(() => {
+  setTimeout(() => {
+    if (initCfg.autoCheckUpdate && (initCfg.updateRepoSlug || DEFAULT_UPDATE_REPO_SLUG)) {
       runUpdateCheck({ allowAutoApply: true }).catch(() => {});
-    }, 5000).unref?.();
-  }
+    }
+    rateSyncStore.syncRates({ force: false }).catch(() => {});
+  }, 5000).unref?.();
 
   // Try Antigravity's native sidecar_sdk first; fall back to standalone HTTP server for local preview/debug
   let sdk = null;

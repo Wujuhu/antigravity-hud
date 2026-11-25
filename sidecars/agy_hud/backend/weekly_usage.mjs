@@ -31,11 +31,11 @@ const QUOTA_GROUP_META = {
   argon: { order: 2, supportsFiveHour: false },
 };
 
-// Standard (non-promotional) API-equivalent rates in USD per 1M tokens
+// Built-in fallback API-equivalent rates in USD per 1M tokens
 export const RATE_TABLE = {
   'gemini-4-carbon': { inPerM: 4, outPerM: 20, crPerM: 0.2 },
   'gemini-4-argon': { inPerM: 4, outPerM: 20, crPerM: 0.2 },
-  'gemini-4-neon': { inPerM: 2, outPerM: 12, crPerM: 0.1 },
+  'gemini-4-neon': { inPerM: 3, outPerM: 15, crPerM: 0.15 },
   'gemini-4-hydrogen': { inPerM: 1.5, outPerM: 7.5, crPerM: 0.075 },
   'gemini-pro-orchestrator': { inPerM: 4, outPerM: 20, crPerM: 0.2 },
   'gemini-3.8-flash': { inPerM: 1.5, outPerM: 7.5, crPerM: 0.15 },
@@ -43,6 +43,7 @@ export const RATE_TABLE = {
   'gemini-3.6-flash': { inPerM: 0.75, outPerM: 3.75, crPerM: 0.075 },
   'gemini-3.5-flash': { inPerM: 1.5, outPerM: 9, crPerM: 0.15 },
   'gemini-3.5-flash-lite': { inPerM: 0.3, outPerM: 2.5, crPerM: 0.03 },
+  'gemini-3.1-flash-lite': { inPerM: 0.25, outPerM: 1.5, crPerM: 0.025 },
   'gemini-3.1-pro': { inPerM: 2, outPerM: 12, crPerM: 0.2 },
   'gemini-2.5-pro': { inPerM: 1.25, outPerM: 10, crPerM: 0.125 },
   'gemini-2.5-flash': { inPerM: 0.3, outPerM: 2.5, crPerM: 0.03 },
@@ -57,11 +58,73 @@ export const RATE_TABLE = {
   'claude-sonnet-4': { inPerM: 3, outPerM: 15, crPerM: 0.3 },
   'claude-haiku-5-5': { inPerM: 0.1, outPerM: 0.5, crPerM: 0.01 },
   'claude-haiku-4-5': { inPerM: 1, outPerM: 5, crPerM: 0.1 },
+  'gpt-5.6-sol': { inPerM: 4, outPerM: 20, crPerM: 0.4 },
+  'gpt-5.4': { inPerM: 2.5, outPerM: 15, crPerM: 0.25 },
+  'gpt-5.2': { inPerM: 1.75, outPerM: 14, crPerM: 0.175 },
+  'gpt-5': { inPerM: 1.25, outPerM: 10, crPerM: 0.125 },
+  'gpt-5-mini': { inPerM: 0.25, outPerM: 2, crPerM: 0.025 },
+  'gpt-5-nano': { inPerM: 0.05, outPerM: 0.4, crPerM: 0.005 },
+  'gpt-4o': { inPerM: 2.5, outPerM: 10, crPerM: 1.25 },
   'gpt-oss-120b': { inPerM: 0.15, outPerM: 0.6, crPerM: 0.15 },
 };
 
 const DEFAULT_FALLBACK_RATE = { inPerM: 1.5, outPerM: 9.0, crPerM: 0.15 };
 const EFFORT_SUFFIX_RE = /-(?:extra-low|low|medium|high|xhigh|max|extra|tiered|thinking|control|agent|customtools)$/i;
+
+let runtimeRateOverrides = {};
+let runtimeRateEntriesSorted = [];
+const builtinRateEntriesSorted = Object.entries(RATE_TABLE).sort((a, b) => b[0].length - a[0].length);
+let rateTableVersion = 0;
+
+export function getRateTableVersion() {
+  return rateTableVersion;
+}
+
+export function getRuntimeRates() {
+  return { ...runtimeRateOverrides };
+}
+
+/**
+ * Replace active runtime rate overrides (from remote sync) and invalidate
+ * cached weekly aggregates so existing & historical conversations immediately
+ * recalculate using the latest rates.
+ */
+export function setRuntimeRates(overrides = {}) {
+  const clean = {};
+  if (overrides && typeof overrides === 'object') {
+    for (const [rawKey, entry] of Object.entries(overrides)) {
+      const k = normalizeModelRateKey(rawKey);
+      if (!k || !entry || typeof entry !== 'object') continue;
+      const inPerM = Number(entry.inPerM);
+      const outPerM = Number(entry.outPerM);
+      const crPerM = Number(entry.crPerM);
+      if (
+        !Number.isFinite(inPerM) ||
+        !Number.isFinite(outPerM) ||
+        !Number.isFinite(crPerM) ||
+        inPerM < 0 ||
+        outPerM < 0 ||
+        crPerM < 0 ||
+        (inPerM === 0 && outPerM === 0)
+      ) {
+        continue;
+      }
+      clean[k] = { inPerM, outPerM, crPerM };
+    }
+  }
+  runtimeRateOverrides = clean;
+  runtimeRateEntriesSorted = Object.entries(clean).sort((a, b) => b[0].length - a[0].length);
+  rateTableVersion += 1;
+  // Invalidate cached weekly totals so next read recalculates with the new rates
+  cachedWeeklySnapshot = null;
+  cachedWeeklySig = '';
+  cachedWeeklyAtMs = 0;
+  return rateTableVersion;
+}
+
+export function clearRuntimeRates() {
+  return setRuntimeRates({});
+}
 
 export function normalizeModelRateKey(rawModel = '') {
   let slug = String(rawModel || '')
@@ -85,9 +148,15 @@ export function normalizeModelRateKey(rawModel = '') {
 export function resolveModelRates(rawModel = '') {
   const slug = normalizeModelRateKey(rawModel);
   if (!slug) return DEFAULT_FALLBACK_RATE;
+  if (runtimeRateOverrides[slug]) return runtimeRateOverrides[slug];
   if (RATE_TABLE[slug]) return RATE_TABLE[slug];
 
-  for (const [key, rates] of Object.entries(RATE_TABLE)) {
+  for (const [key, rates] of runtimeRateEntriesSorted) {
+    if (slug.startsWith(key) || slug.includes(key)) {
+      return rates;
+    }
+  }
+  for (const [key, rates] of builtinRateEntriesSorted) {
     if (slug.startsWith(key) || slug.includes(key)) {
       return rates;
     }
@@ -98,7 +167,8 @@ export function resolveModelRates(rawModel = '') {
   }
   if (slug.includes('sonnet')) return { inPerM: 3, outPerM: 15, crPerM: 0.3 };
   if (slug.includes('haiku')) return { inPerM: 1, outPerM: 5, crPerM: 0.1 };
-  if (slug.includes('neon') || slug.includes('pro')) return { inPerM: 2, outPerM: 12, crPerM: 0.15 };
+  if (slug.includes('neon')) return { inPerM: 3, outPerM: 15, crPerM: 0.15 };
+  if (slug.includes('pro')) return { inPerM: 2, outPerM: 12, crPerM: 0.15 };
   if (slug.includes('flash-lite') || slug.includes('lite')) return { inPerM: 0.3, outPerM: 2.5, crPerM: 0.03 };
   if (slug.includes('flash') || slug.includes('hydrogen')) return { inPerM: 1.5, outPerM: 7.5, crPerM: 0.1 };
   if (slug.includes('gpt')) return { inPerM: 2.5, outPerM: 10, crPerM: 0.25 };

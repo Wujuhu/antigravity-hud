@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { estimateTurnCostUsd } from './weekly_usage.mjs';
+import { estimateTurnCostUsd, getRateTableVersion } from './weekly_usage.mjs';
 
 export const MIN_STREAM_DUR_SEC = 0.12;
 export const MAX_SANITY_STREAM_TPS = 3000;
@@ -438,7 +438,7 @@ function getDbFileSignature(dbPath) {
     if (!st) return null;
     const wst = fs.statSync(`${dbPath}-wal`, { throwIfNoEntry: false });
     const walSig = wst ? `${wst.mtimeMs}:${wst.size}` : '0:0';
-    return `${st.mtimeMs}:${st.size}|${walSig}`;
+    return `${st.mtimeMs}:${st.size}|${walSig}|r:${getRateTableVersion()}`;
   } catch {
     return null;
   }

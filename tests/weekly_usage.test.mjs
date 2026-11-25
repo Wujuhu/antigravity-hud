@@ -21,7 +21,7 @@ test('normalizeModelRateKey and resolveModelRates handle effort suffixes and mod
   assert.equal(normalizeModelRateKey('gemini-4-argon-high'), 'gemini-4-argon');
   assert.equal(normalizeModelRateKey('models/claude-sonnet-4-5-thinking'), 'claude-sonnet-4-5');
   assert.deepEqual(resolveModelRates('gemini-4-argon-xhigh'), { inPerM: 4, outPerM: 20, crPerM: 0.2 });
-  assert.deepEqual(resolveModelRates('gemini-4-neon-high'), { inPerM: 2, outPerM: 12, crPerM: 0.1 });
+  assert.deepEqual(resolveModelRates('gemini-4-neon-high'), { inPerM: 3, outPerM: 15, crPerM: 0.15 });
 });
 
 test('estimateTurnCostUsd calculates actual cost and prompt cache savings accurately', () => {
@@ -67,7 +67,7 @@ test('aggregateWeeklySteps supports per-group cycleStartMs cutoffs cleanly', () 
     argon: Date.parse('2026-11-18T00:00:00.000Z'),
   });
   assert.equal(agg.byGroup.gemini.tokens, 750_000);
-  assert.equal(agg.byGroup.gemini.costUsd, 4);
+  assert.equal(agg.byGroup.gemini.costUsd, 5.25);
   assert.equal(agg.byGroup.argon.tokens, 600_000);
   assert.equal(agg.totalTokens, 1_350_000);
 });
