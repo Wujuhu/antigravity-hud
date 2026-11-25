@@ -159,3 +159,31 @@ test('createRateSyncStore syncs from Models.dev + LiteLLM, persists cache, respe
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
+
+test('dated aliases prefer newest date regardless of key order, and short keys like o1 never hijack unrelated models', () => {
+  try {
+    clearRuntimeRates();
+    const parsed = parseModelsDevPayload({
+      anthropic: {
+        models: {
+          'claude-sonnet-4-5-20250929': { cost: { input: 3, output: 15, cache_read: 0.3 } },
+          'claude-sonnet-4-5-20260115': { cost: { input: 2.5, output: 12.5, cache_read: 0.25 } },
+          'claude-sonnet-4-5-20250501': { cost: { input: 4, output: 20, cache_read: 0.4 } },
+        },
+      },
+      openai: {
+        models: {
+          o1: { cost: { input: 15, output: 60, cache_read: 7.5 } },
+        },
+      },
+    });
+    // Newest dated variant (20260115) wins for baseSlug regardless of object key order
+    assert.deepEqual(parsed['claude-sonnet-4-5'], { inPerM: 2.5, outPerM: 12.5, crPerM: 0.25 });
+
+    // Short key `o1` must NOT hijack a model whose slug merely contains substring "o1" (e.g. demo1-model)
+    assert.equal(resolveModelRates('gemini-4-argon-high').inPerM, 4);
+    assert.notEqual(resolveModelRates('custom-demo1-preview').inPerM, 15);
+  } finally {
+    clearRuntimeRates();
+  }
+});

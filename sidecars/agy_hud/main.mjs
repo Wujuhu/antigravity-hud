@@ -82,15 +82,15 @@ let latestUpdateStatus = {
   checkedAtMs: null,
   error: '',
 };
-let syncInFlight = false;
+let syncInFlightPromise = null;
 let pollTimer = null;
 let updateTimer = null;
 let rateSyncTimer = null;
 
 async function syncOnce({ forceQuota = false } = {}) {
-  if (syncInFlight) return latestSnapshot;
-  syncInFlight = true;
-  try {
+  if (syncInFlightPromise) return syncInFlightPromise;
+  syncInFlightPromise = (async () => {
+    try {
     const config = configStore.get();
 
     // Fetch quota once per sync cycle (cached internally by quotaClient)
@@ -184,10 +184,12 @@ async function syncOnce({ forceQuota = false } = {}) {
       await reconcileLauncherStatus();
     }
 
-    return primarySnapshot;
-  } finally {
-    syncInFlight = false;
-  }
+      return primarySnapshot;
+    } finally {
+      syncInFlightPromise = null;
+    }
+  })();
+  return syncInFlightPromise;
 }
 
 function restartPollingLoop() {
@@ -254,7 +256,12 @@ async function runApplyUpdate() {
 function restartRateSyncLoop() {
   if (rateSyncTimer) clearInterval(rateSyncTimer);
   rateSyncTimer = setInterval(() => {
-    rateSyncStore.syncRates({ force: false }).catch(() => {});
+    rateSyncStore
+      .syncRates({ force: false })
+      .then((s) => {
+        if (s?.ok) return syncOnce();
+      })
+      .catch(() => {});
   }, RATE_SYNC_INTERVAL_MS);
   rateSyncTimer.unref?.();
 }
@@ -415,7 +422,12 @@ async function start() {
     if (initCfg.autoCheckUpdate && (initCfg.updateRepoSlug || DEFAULT_UPDATE_REPO_SLUG)) {
       runUpdateCheck({ allowAutoApply: true }).catch(() => {});
     }
-    rateSyncStore.syncRates({ force: false }).catch(() => {});
+    rateSyncStore
+      .syncRates({ force: false })
+      .then((s) => {
+        if (s?.ok) return syncOnce();
+      })
+      .catch(() => {});
   }, 5000).unref?.();
 
   // Try Antigravity's native sidecar_sdk first; fall back to standalone HTTP server for local preview/debug

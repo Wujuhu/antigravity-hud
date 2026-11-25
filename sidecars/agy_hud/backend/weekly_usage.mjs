@@ -145,6 +145,23 @@ export function normalizeModelRateKey(rawModel = '') {
   return slug;
 }
 
+function matchesRateKeyBoundary(slug, key) {
+  if (slug === key) return true;
+  if (slug.startsWith(`${key}-`) || slug.startsWith(`${key}.`)) return true;
+  // Allow substring match only for sufficiently specific keys (>= 5 chars) at token boundaries
+  if (key.length >= 5) {
+    const idx = slug.indexOf(key);
+    if (idx > 0) {
+      const before = slug[idx - 1];
+      const after = slug[idx + key.length];
+      const leftOk = before === '-' || before === '.' || before === '/';
+      const rightOk = !after || after === '-' || after === '.';
+      if (leftOk && rightOk) return true;
+    }
+  }
+  return false;
+}
+
 export function resolveModelRates(rawModel = '') {
   const slug = normalizeModelRateKey(rawModel);
   if (!slug) return DEFAULT_FALLBACK_RATE;
@@ -152,12 +169,12 @@ export function resolveModelRates(rawModel = '') {
   if (RATE_TABLE[slug]) return RATE_TABLE[slug];
 
   for (const [key, rates] of runtimeRateEntriesSorted) {
-    if (slug.startsWith(key) || slug.includes(key)) {
+    if (matchesRateKeyBoundary(slug, key)) {
       return rates;
     }
   }
   for (const [key, rates] of builtinRateEntriesSorted) {
-    if (slug.startsWith(key) || slug.includes(key)) {
+    if (matchesRateKeyBoundary(slug, key)) {
       return rates;
     }
   }

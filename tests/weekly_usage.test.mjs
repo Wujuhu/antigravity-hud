@@ -538,4 +538,46 @@ test('idleFull -> active aligns to authoritative resetTime - windowMs even when 
   assert.equal(keptTopUp.anchors.gemini.cycleStartMs, lateIdleAt);
   assert.equal(keptTopUp.anchors.gemini.anchorFraction, 0.7);
   assert.equal(keptTopUp.anchors.gemini.reason, 'partial_topup');
+
+  // 5. Genuine v2 manual_reset anchor (with anchorFraction=1) MUST NOT be reverted by self-heal
+  const genuineManualReset = {
+    gemini: {
+      v: 2,
+      cycleStartMs: lateIdleAt,
+      resetTimeMs,
+      anchorFraction: 1.0,
+      lastFraction: 0.96,
+      lastObservedAtMs: lateIdleAt + 120_000,
+      idleFull: false,
+      reason: 'manual_reset',
+    },
+  };
+  const keptManual = updateAnchorsFromQuotaGroups(
+    genuineManualReset,
+    [{ key: 'gemini', weekly: { remainingFraction: 0.94, resetTimeMs } }],
+    lateIdleAt + 300_000,
+  );
+  assert.equal(keptManual.anchors.gemini.cycleStartMs, lateIdleAt);
+  assert.equal(keptManual.anchors.gemini.reason, 'manual_reset');
+
+  // 6. In-cycle manual refill whose server resetTime does NOT advance keeps enteredFullAt
+  const activeMid = updateAnchorsFromQuotaGroups(
+    {},
+    [{ key: 'gemini', weekly: { remainingFraction: 0.4, resetTimeMs } }],
+    lateIdleAt - 10 * 60_000,
+  );
+  const manualRefilled = updateAnchorsFromQuotaGroups(
+    activeMid.anchors,
+    [{ key: 'gemini', weekly: { remainingFraction: 1.0, resetTimeMs: null } }],
+    lateIdleAt,
+  );
+  assert.equal(manualRefilled.anchors.gemini.reason, 'manual_reset');
+  assert.equal(manualRefilled.anchors.gemini.prevResetTimeMs, resetTimeMs);
+  const afterRefillSameReset = updateAnchorsFromQuotaGroups(
+    manualRefilled.anchors,
+    [{ key: 'gemini', weekly: { remainingFraction: 0.97, resetTimeMs } }],
+    lateIdleAt + 60_000,
+  );
+  assert.equal(afterRefillSameReset.anchors.gemini.cycleStartMs, lateIdleAt);
+  assert.equal(afterRefillSameReset.anchors.gemini.reason, 'manual_reset');
 });

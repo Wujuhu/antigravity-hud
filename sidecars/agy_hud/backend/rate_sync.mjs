@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { atomicWriteJson } from './config.mjs';
 import {
+  getRuntimeRates,
   normalizeModelRateKey,
   setRuntimeRates,
 } from './weekly_usage.mjs';
@@ -82,15 +83,32 @@ function stripProviderPrefix(rawId = '') {
   return idx >= 0 ? s.slice(idx + 1) : s;
 }
 
-function insertModelWithAlias(target, rawModelId, rate, { overwrite = true } = {}) {
+function extractDateRank(slug) {
+  const m = slug.match(DATE_SUFFIX_RE);
+  if (!m) return null;
+  const digits = m[0].replace(/[^0-9]/g, '');
+  const n = Number(digits);
+  return Number.isFinite(n) ? n : null;
+}
+
+function insertModelWithAlias(target, baseDateRanks, rawModelId, rate, { overwrite = true } = {}) {
   const slug = normalizeModelRateKey(stripProviderPrefix(rawModelId));
   if (!isRelevantChatModelKey(slug)) return;
   if (overwrite || !target[slug]) {
     target[slug] = rate;
+    // Direct non-dated canonical key always locks baseDateRanks with Infinity so dated variants cannot downgrade it
+    if (!DATE_SUFFIX_RE.test(slug)) {
+      baseDateRanks.set(slug, Number.POSITIVE_INFINITY);
+    }
   }
   const baseSlug = slug.replace(DATE_SUFFIX_RE, '');
-  if (baseSlug && baseSlug !== slug && isRelevantChatModelKey(baseSlug) && !target[baseSlug]) {
-    target[baseSlug] = rate;
+  if (baseSlug && baseSlug !== slug && isRelevantChatModelKey(baseSlug)) {
+    const rank = extractDateRank(slug) ?? 0;
+    const prevRank = baseDateRanks.get(baseSlug) ?? -1;
+    if (rank >= prevRank) {
+      target[baseSlug] = rate;
+      baseDateRanks.set(baseSlug, rank);
+    }
   }
 }
 
@@ -99,6 +117,7 @@ function insertModelWithAlias(target, rawModelId, rate, { overwrite = true } = {
  */
 export function parseModelsDevPayload(payload) {
   const rates = {};
+  const baseDateRanks = new Map();
   if (!payload || typeof payload !== 'object') return rates;
 
   // 1. Primary first-party providers (google, anthropic, openai)
@@ -110,7 +129,7 @@ export function parseModelsDevPayload(payload) {
       if (!cost || typeof cost !== 'object') continue;
       const entry = sanitizeRateEntry(cost.input, cost.output, cost.cache_read);
       if (!entry) continue;
-      insertModelWithAlias(rates, modelId, entry, { overwrite: true });
+      insertModelWithAlias(rates, baseDateRanks, modelId, entry, { overwrite: true });
     }
   }
 
@@ -124,7 +143,7 @@ export function parseModelsDevPayload(payload) {
       if (!cost || typeof cost !== 'object') continue;
       const entry = sanitizeRateEntry(cost.input, cost.output, cost.cache_read);
       if (!entry) continue;
-      insertModelWithAlias(rates, modelId, entry, { overwrite: false });
+      insertModelWithAlias(rates, baseDateRanks, modelId, entry, { overwrite: false });
     }
   }
 
@@ -137,23 +156,20 @@ export function parseModelsDevPayload(payload) {
  */
 export function parseLiteLlmPayload(payload) {
   const rates = {};
+  const baseDateRanks = new Map();
   if (!payload || typeof payload !== 'object') return rates;
 
-  const ALLOWED_PREFIX_RE = /^(?:(?:gemini|google|anthropic|openai|together_ai\/openai)\/)?/i;
-  const DISALLOWED_HOST_RE =
-    /^(?:bedrock|vertex_ai|azure|cloudflare|databricks|deepinfra|replicate|sagemaker|snowflake|watsonx|perplexity|groq|cerebras|nebius|sambanova|openrouter)\//i;
+  const ALLOWED_PREFIX_RE = /^(?:gemini|google|anthropic|openai|together_ai\/openai)\//i;
 
   for (const [rawKey, meta] of Object.entries(payload)) {
-    if (!meta || typeof meta !== 'object') continue;
-    if (rawKey === 'sample_spec' || DISALLOWED_HOST_RE.test(rawKey)) continue;
+    if (!meta || typeof meta !== 'object' || rawKey === 'sample_spec') continue;
 
-    // Only accept bare canonical keys or direct first-party / together_ai open-weight prefixes
     const hasSlash = rawKey.includes('/');
-    if (hasSlash && !/^(?:gemini|google|anthropic|openai|together_ai\/openai)\//i.test(rawKey)) {
+    if (hasSlash && !ALLOWED_PREFIX_RE.test(rawKey)) {
       continue;
     }
 
-    const bareName = rawKey.replace(ALLOWED_PREFIX_RE, '');
+    const bareName = hasSlash ? rawKey.replace(ALLOWED_PREFIX_RE, '') : rawKey;
     if (bareName.includes('/')) continue;
 
     const inPerM =
@@ -169,7 +185,7 @@ export function parseLiteLlmPayload(payload) {
     if (!entry) continue;
 
     // Bare canonical keys take precedence over prefixed duplicates within LiteLLM
-    insertModelWithAlias(rates, bareName, entry, { overwrite: !hasSlash });
+    insertModelWithAlias(rates, baseDateRanks, bareName, entry, { overwrite: !hasSlash });
   }
 
   return rates;
@@ -241,15 +257,16 @@ export function createRateSyncStore(
       if (fs.existsSync(cacheFile)) {
         const parsed = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
         if (parsed && typeof parsed === 'object' && parsed.rates && typeof parsed.rates === 'object') {
-          const count = Object.keys(parsed.rates).length;
+          setRuntimeRates(parsed.rates);
+          const cleaned = getRuntimeRates();
+          const count = Object.keys(cleaned).length;
           if (count > 0) {
-            setRuntimeRates(parsed.rates);
             state = {
               ok: true,
               fetchedAtMs: Number(parsed.fetchedAtMs || 0),
               sources: Array.isArray(parsed.sources) ? parsed.sources : [],
               modelCount: count,
-              rates: parsed.rates,
+              rates: cleaned,
               error: '',
             };
           }
@@ -309,16 +326,23 @@ export function createRateSyncStore(
           return getStatus();
         }
 
-        const merged = mergeRemoteRateMaps({ litellmRates, modelsDevRates });
+        // If Models.dev transiently failed while LiteLLM succeeded, preserve previously
+        // cached primary rates so active promotional overrides aren't clobbered.
+        const merged = mergeRemoteRateMaps({
+          litellmRates,
+          modelsDevRates:
+            Object.keys(modelsDevRates).length > 0 ? modelsDevRates : state.rates,
+        });
         setRuntimeRates(merged);
+        const activeRates = getRuntimeRates();
 
         const syncedAtMs = now();
         state = {
           ok: true,
           fetchedAtMs: syncedAtMs,
           sources: succeededSources,
-          modelCount: Object.keys(merged).length,
-          rates: merged,
+          modelCount: Object.keys(activeRates).length,
+          rates: activeRates,
           error: '',
         };
 
@@ -326,7 +350,7 @@ export function createRateSyncStore(
           fetchedAtMs: syncedAtMs,
           sources: succeededSources,
           modelCount: state.modelCount,
-          rates: merged,
+          rates: activeRates,
         }).catch(() => {});
 
         return getStatus();

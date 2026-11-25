@@ -71,6 +71,18 @@ export function toResetTimeMs(bucket, nowMs = Date.now()) {
   return null;
 }
 
+function shouldHealDriftedFullStart({ prev, resetTimeMs, windowMs, resetShiftMs, nowMs }) {
+  if (!prev || prev.idleFull || resetTimeMs === null) return false;
+  if (Number(prev.anchorFraction ?? 1) < FULL_THRESHOLD) return false;
+  if (prev.reason !== 'cycle_activated' && prev.reason !== 'natural_window') return false;
+  if (prev.resetTimeMs !== null && Math.abs(resetTimeMs - prev.resetTimeMs) > resetShiftMs) {
+    return false;
+  }
+  const inferredStart = resetTimeMs - windowMs;
+  const prevStart = Number(prev.cycleStartMs || 0);
+  return inferredStart <= nowMs && prevStart > inferredStart + START_DRIFT_HEAL_MS;
+}
+
 function updateSingleBucketAnchor({
   prev,
   bucket,
@@ -149,35 +161,28 @@ function updateSingleBucketAnchor({
     };
   }
 
-  // Migration self-heal #2: recover v1/v2 full-baseline anchors whose `cycleStartMs`
-  // was truncated later than the true cycle start (`resetTimeMs - windowMs`) after a
-  // transient `idleFull` observation, causing early-cycle local usage to be dropped.
+  // Migration self-heal #2: recover v1/v2 full-baseline natural/activated anchors whose
+  // `cycleStartMs` drifted later than `resetTimeMs - windowMs`, without touching
+  // genuine `manual_reset` or `partial_topup` anchors or cross-cycle transitions.
   if (
     !isFullNow &&
-    !prev.idleFull &&
     Number(prev.v || 1) < ANCHOR_SCHEMA_VERSION &&
-    Number(prev.anchorFraction ?? 1) >= FULL_THRESHOLD &&
-    prev.reason !== 'partial_topup' &&
-    resetTimeMs !== null
+    shouldHealDriftedFullStart({ prev, resetTimeMs, windowMs, resetShiftMs, nowMs })
   ) {
-    const inferredStart = resetTimeMs - windowMs;
-    const prevStart = Number(prev.cycleStartMs || 0);
-    if (inferredStart <= nowMs && prevStart > inferredStart + START_DRIFT_HEAL_MS) {
-      return {
-        anchor: {
-          v: ANCHOR_SCHEMA_VERSION,
-          cycleStartMs: inferredStart,
-          resetTimeMs,
-          anchorFraction: 1.0,
-          lastFraction: frac,
-          lastObservedAtMs: nowMs,
-          idleFull: false,
-          reason: 'natural_window',
-        },
-        changed: true,
-        shouldPersist: true,
-      };
-    }
+    return {
+      anchor: {
+        v: ANCHOR_SCHEMA_VERSION,
+        cycleStartMs: resetTimeMs - windowMs,
+        resetTimeMs,
+        anchorFraction: 1.0,
+        lastFraction: frac,
+        lastObservedAtMs: nowMs,
+        idleFull: false,
+        reason: 'natural_window',
+      },
+      changed: true,
+      shouldPersist: true,
+    };
   }
 
   // Case 1: Currently full (countdown paused / waiting for first consumption)
@@ -200,6 +205,7 @@ function updateSingleBucketAnchor({
         v: ANCHOR_SCHEMA_VERSION,
         cycleStartMs: nowMs,
         resetTimeMs: null,
+        prevResetTimeMs: prev.resetTimeMs ?? null,
         anchorFraction: 1.0,
         lastFraction: frac,
         lastObservedAtMs: nowMs,
@@ -212,14 +218,20 @@ function updateSingleBucketAnchor({
   }
 
   // Case 2: Transitioning out of Idle Full on first real consumption.
-  // Always align to the authoritative server cycle start (`resetTimeMs - windowMs`)
-  // whenever available so local numerator and quota denominator share the exact same
-  // origin even if `idleFull` was entered late or triggered by a transient 1.0 reading.
+  // Align to authoritative server cycle start (`resetTimeMs - windowMs`) unless this
+  // was an in-cycle manual refill whose server resetTime did not advance at all.
   if (prev.idleFull) {
     const inferredStart = resetTimeMs !== null ? resetTimeMs - windowMs : null;
     const enteredFullAt = Number(prev.cycleStartMs || 0);
+    const sameCycleManualRefill =
+      prev.reason === 'manual_reset' &&
+      prev.prevResetTimeMs != null &&
+      resetTimeMs !== null &&
+      Math.abs(resetTimeMs - Number(prev.prevResetTimeMs)) <= resetShiftMs &&
+      inferredStart !== null &&
+      inferredStart < enteredFullAt - 60_000;
     const cycleStartMs =
-      inferredStart !== null && inferredStart <= nowMs
+      !sameCycleManualRefill && inferredStart !== null && inferredStart <= nowMs
         ? inferredStart
         : Math.max(enteredFullAt, Number(prev.lastObservedAtMs || enteredFullAt));
     return {
@@ -231,7 +243,7 @@ function updateSingleBucketAnchor({
         lastFraction: frac,
         lastObservedAtMs: nowMs,
         idleFull: false,
-        reason: 'cycle_activated',
+        reason: sameCycleManualRefill ? 'manual_reset' : 'cycle_activated',
       },
       changed: true,
       shouldPersist: true,
@@ -310,14 +322,14 @@ function updateSingleBucketAnchor({
   // Case 5: Normal consumption inside current active cycle (tolerates minor non-reset rebounds)
   const drop = Number(prev.lastFraction ?? frac) - frac;
   const updatedReset = resetTimeMs !== null ? resetTimeMs : prev.resetTimeMs;
-  const inferredNaturalStart = updatedReset !== null ? updatedReset - windowMs : null;
-  const shouldAlignNaturalStart =
-    Number(prev.anchorFraction ?? 1) >= FULL_THRESHOLD &&
-    (prev.reason === 'cycle_activated' || prev.reason === 'natural_window') &&
-    inferredNaturalStart !== null &&
-    inferredNaturalStart <= nowMs &&
-    Number(prev.cycleStartMs || 0) > inferredNaturalStart + START_DRIFT_HEAL_MS;
-  const nextCycleStartMs = shouldAlignNaturalStart ? inferredNaturalStart : prev.cycleStartMs;
+  const shouldAlignNaturalStart = shouldHealDriftedFullStart({
+    prev,
+    resetTimeMs: updatedReset,
+    windowMs,
+    resetShiftMs,
+    nowMs,
+  });
+  const nextCycleStartMs = shouldAlignNaturalStart ? updatedReset - windowMs : prev.cycleStartMs;
   const shouldPersist =
     drop >= PERSIST_DROP_DELTA ||
     updatedReset !== prev.resetTimeMs ||
