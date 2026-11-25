@@ -179,7 +179,7 @@ test('quota anchors simultaneously handle natural resets, official manual resets
   assert.equal(healed.anchors.gemini.reason, 'natural_window');
   assert.equal(healed.anchors.gemini.cycleStartMs, activateAt);
   assert.equal(healed.anchors.gemini.anchorFraction, 1.0);
-  assert.equal(healed.anchors.gemini.v, 2);
+  assert.equal(healed.anchors.gemini.v, 3);
 
   // 3. Partial consumption (0.98 -> 0.20), then official major partial top-up (0.20 -> 0.70, +50% >= 20%)
   const now3 = Date.parse('2026-11-25T12:00:00.000Z');
@@ -466,4 +466,76 @@ test('buildWeeklyQuotaEstimates enforces canonical order, keeps Argon weekly-onl
   assert.equal(est.hasExtrapolation, true);
   assert.equal(est.estimatedCombinedWeeklyTokens, null);
   assert.equal(est.estimatedCombinedWeeklyCostUsd, null);
+});
+
+test('idleFull -> active aligns to authoritative resetTime - windowMs even when entered late, and v2 drifted anchors self-heal', () => {
+  // Real-world regression: true cycle started at 10:21, transient idleFull occurred at 12:58
+  const trueStart = Date.parse('2026-11-24T02:21:03.000Z'); // 10:21:03 +08
+  const resetTimeMs = trueStart + SEVEN_DAYS_MS;
+  const lateIdleAt = Date.parse('2026-11-24T04:58:56.000Z'); // 12:58:56 +08
+
+  // 1. Transient idle_full observed at 12:58:56
+  const sIdle = updateAnchorsFromQuotaGroups(
+    {},
+    [{ key: 'gemini', weekly: { remainingFraction: 1.0, resetTimeMs: null } }],
+    lateIdleAt,
+  );
+  assert.equal(sIdle.anchors.gemini.idleFull, true);
+  assert.equal(sIdle.anchors.gemini.cycleStartMs, lateIdleAt);
+
+  // 2. Next tick receives authoritative resetTimeMs (10:21 + 7d) and 95.4% remaining
+  // Must align cycleStartMs to 10:21:03, NOT truncate to 12:58:56!
+  const sActive = updateAnchorsFromQuotaGroups(
+    sIdle.anchors,
+    [{ key: 'gemini', weekly: { remainingFraction: 0.954, resetTimeMs } }],
+    lateIdleAt + 30_000,
+  );
+  assert.equal(sActive.anchors.gemini.idleFull, false);
+  assert.equal(sActive.anchors.gemini.cycleStartMs, trueStart);
+  assert.equal(sActive.anchors.gemini.anchorFraction, 1.0);
+
+  // 3. Existing persisted v2 anchor with drifted cycleStartMs (12:58:56 vs true 10:21:03) self-heals
+  const legacyV2Drifted = {
+    gemini: {
+      v: 2,
+      cycleStartMs: lateIdleAt,
+      resetTimeMs,
+      anchorFraction: 1,
+      lastFraction: 0.92,
+      lastObservedAtMs: lateIdleAt + 3600_000,
+      idleFull: false,
+      reason: 'cycle_activated',
+    },
+  };
+  const healed = updateAnchorsFromQuotaGroups(
+    legacyV2Drifted,
+    [{ key: 'gemini', weekly: { remainingFraction: 0.918, resetTimeMs } }],
+    lateIdleAt + 4000_000,
+  );
+  assert.equal(healed.anchors.gemini.v, 3);
+  assert.equal(healed.anchors.gemini.cycleStartMs, trueStart);
+  assert.equal(healed.anchors.gemini.reason, 'natural_window');
+  assert.equal(healed.shouldPersist, true);
+
+  // 4. Genuine partial_topup anchor (< 1.0 baseline) MUST NOT be overwritten by self-heal
+  const genuineTopUp = {
+    gemini: {
+      v: 2,
+      cycleStartMs: lateIdleAt,
+      resetTimeMs,
+      anchorFraction: 0.7,
+      lastFraction: 0.65,
+      lastObservedAtMs: lateIdleAt + 3600_000,
+      idleFull: false,
+      reason: 'partial_topup',
+    },
+  };
+  const keptTopUp = updateAnchorsFromQuotaGroups(
+    genuineTopUp,
+    [{ key: 'gemini', weekly: { remainingFraction: 0.62, resetTimeMs } }],
+    lateIdleAt + 4000_000,
+  );
+  assert.equal(keptTopUp.anchors.gemini.cycleStartMs, lateIdleAt);
+  assert.equal(keptTopUp.anchors.gemini.anchorFraction, 0.7);
+  assert.equal(keptTopUp.anchors.gemini.reason, 'partial_topup');
 });
