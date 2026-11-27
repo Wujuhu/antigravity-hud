@@ -313,7 +313,7 @@
     const manualCmd =
       launcherStatus?.manualCommand ||
       launcherInfo?.manualCommand ||
-      `antigravity --remote-debugging-port=${port || 9229}`;
+      `antigravity --remote-debugging-port=${port ?? 0}`;
 
     if (status === 'disabled') {
       return {

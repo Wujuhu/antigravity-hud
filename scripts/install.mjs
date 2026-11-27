@@ -20,7 +20,9 @@ import { fileURLToPath } from 'node:url';
 
 import {
   DEFAULT_CDP_PORT,
+  LEGACY_DEFAULT_CDP_PORT,
   createConfigStore,
+  normalizeCdpPort,
   resolveDataDir,
 } from '../sidecars/agy_hud/backend/config.mjs';
 import { validateRepoSlug } from '../sidecars/agy_hud/backend/updater.mjs';
@@ -116,7 +118,13 @@ export async function installPlugin({
 
   const store = createConfigStore(dataDir);
   const currentCfg = store.get();
-  const effectivePort = Number(cdpPort) || currentCfg.cdpPort || DEFAULT_CDP_PORT;
+  // Auto-migrate legacy fixed default 9229 -> dynamic port 0 unless user explicitly passed --port
+  const effectivePort =
+    cdpPort !== null && cdpPort !== undefined
+      ? normalizeCdpPort(cdpPort, DEFAULT_CDP_PORT)
+      : currentCfg.cdpPort === LEGACY_DEFAULT_CDP_PORT
+        ? DEFAULT_CDP_PORT
+        : normalizeCdpPort(currentCfg.cdpPort, DEFAULT_CDP_PORT);
   const detectedSlug = validateRepoSlug(repoSlug) || currentCfg.updateRepoSlug || detectGitHubRepoSlug(sourceRoot);
   const savedCfg = await store.save({
     cdpPort: effectivePort,

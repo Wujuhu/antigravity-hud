@@ -19,8 +19,8 @@ import {
 import { createQuotaClient } from './backend/quota.mjs';
 import { collectLiveSnapshot } from './backend/telemetry_aggregator.mjs';
 import {
+  discoverCdpTargets,
   extractConversationIdFromUrl,
-  listCdpTargets,
   pushExpressionToTargets,
 } from './backend/cdp_bridge.mjs';
 import { createLauncherReconciler } from './backend/launcher_check.mjs';
@@ -120,44 +120,44 @@ async function syncOnce({ forceQuota = false } = {}) {
 
     let primarySnapshot = null;
 
-    if (config.cdpEnabled) {
-      const discovery = await listCdpTargets(config.cdpPort, { timeoutMs: 1500 });
-      if (discovery.ok && discovery.targets.length > 0) {
-        let lastTargetSnap = null;
-        latestCdpStatus = await pushExpressionToTargets({
-          port: config.cdpPort,
-          targetsOverride: discovery.targets,
-          buildExpressionForTarget: async (target, targetConvId) => {
-            // If target URL is an Antigravity loopback web app without /c/<uuid>, it's a fresh/home view
-            const lowUrl = String(target.url || '').toLowerCase();
-            const isWebAppHome =
-              !targetConvId &&
-              (lowUrl.startsWith('https://127.0.0.1:') ||
-                lowUrl.startsWith('https://localhost:') ||
-                lowUrl.startsWith('http://127.0.0.1:') ||
-                lowUrl.startsWith('http://localhost:'));
-            const convToUse = targetConvId || (isWebAppHome ? '' : activeConversationId);
-            const allowFallback = !isWebAppHome;
-            const snap = await getSnapshotForConv(convToUse, allowFallback);
-            lastTargetSnap = snap;
-            return buildHudInjectExpression(snap, config);
-          },
-        });
-        if (latestCdpStatus.detectedConversationId) {
-          activeConversationId = latestCdpStatus.detectedConversationId;
+      if (config.cdpEnabled) {
+        const discovery = await discoverCdpTargets(config.cdpPort, { timeoutMs: 1500 });
+        if (discovery.ok && discovery.targets.length > 0) {
+          let lastTargetSnap = null;
+          latestCdpStatus = await pushExpressionToTargets({
+            port: discovery.port || config.cdpPort,
+            targetsOverride: discovery.targets,
+            buildExpressionForTarget: async (target, targetConvId) => {
+              // If target URL is an Antigravity loopback web app without /c/<uuid>, it's a fresh/home view
+              const lowUrl = String(target.url || '').toLowerCase();
+              const isWebAppHome =
+                !targetConvId &&
+                (lowUrl.startsWith('https://127.0.0.1:') ||
+                  lowUrl.startsWith('https://localhost:') ||
+                  lowUrl.startsWith('http://127.0.0.1:') ||
+                  lowUrl.startsWith('http://localhost:'));
+              const convToUse = targetConvId || (isWebAppHome ? '' : activeConversationId);
+              const allowFallback = !isWebAppHome;
+              const snap = await getSnapshotForConv(convToUse, allowFallback);
+              lastTargetSnap = snap;
+              return buildHudInjectExpression(snap, config);
+            },
+          });
+          if (latestCdpStatus.detectedConversationId) {
+            activeConversationId = latestCdpStatus.detectedConversationId;
+          }
+          primarySnapshot = lastTargetSnap;
+        } else {
+          latestCdpStatus = {
+            connected: false,
+            port: discovery.port || config.cdpPort,
+            injectedCount: 0,
+            anchorFound: false,
+            detectedConversationId: '',
+            error: discovery.error || 'CDP 调试端口未就绪',
+          };
         }
-        primarySnapshot = lastTargetSnap;
       } else {
-        latestCdpStatus = {
-          connected: false,
-          port: config.cdpPort,
-          injectedCount: 0,
-          anchorFound: false,
-          detectedConversationId: '',
-          error: discovery.error || `CDP 端口 :${config.cdpPort} 未就绪`,
-        };
-      }
-    } else {
       latestCdpStatus = {
         connected: false,
         port: config.cdpPort,

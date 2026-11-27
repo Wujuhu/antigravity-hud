@@ -3,8 +3,19 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-export const DEFAULT_CDP_PORT = 9229;
+export const DEFAULT_CDP_PORT = 0; // 0 = OS-assigned dynamic free port via DevToolsActivePort (immune to Windows excludedportrange)
+export const LEGACY_DEFAULT_CDP_PORT = 9229;
 export const DEFAULT_UPDATE_REPO_SLUG = 'Wujuhu/antigravity-hud';
+
+export function normalizeCdpPort(val, fallback = DEFAULT_CDP_PORT) {
+  if (val === 0 || val === '0') return 0;
+  if (val === null || val === undefined || val === '') return fallback;
+  const n = Number(val);
+  if (!Number.isFinite(n)) return fallback;
+  const r = Math.round(n);
+  if (r === 0) return 0;
+  return Math.max(1024, Math.min(65535, r));
+}
 
 export const PILL_ITEM_CATALOG = [
   { id: 'context', label: 'Context', defaultEnabled: true },
@@ -132,7 +143,7 @@ export function normalizeConfig(raw = {}) {
 
   return {
     cdpEnabled: typeof src.cdpEnabled === 'boolean' ? src.cdpEnabled : defaults.cdpEnabled,
-    cdpPort: clampInt(src.cdpPort, 1024, 65535, defaults.cdpPort),
+    cdpPort: normalizeCdpPort(src.cdpPort, defaults.cdpPort),
     pollIntervalMs: clampInt(src.pollIntervalMs, 800, 10000, defaults.pollIntervalMs),
     hoverDelayMs: clampInt(src.hoverDelayMs, 0, 1000, defaults.hoverDelayMs),
     contextDisplayFormat,

@@ -13,7 +13,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { DEFAULT_CDP_PORT, atomicWriteText } from './config.mjs';
+import { DEFAULT_CDP_PORT, atomicWriteText, normalizeCdpPort } from './config.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -40,7 +40,8 @@ export function findWindowsAntigravityExe(env = process.env) {
 }
 
 export function buildWindowsVbsContent(exePath, port = DEFAULT_CDP_PORT) {
-  const cdpArg = `--remote-debugging-port=${port}`;
+  const p = normalizeCdpPort(port, DEFAULT_CDP_PORT);
+  const cdpArg = `--remote-debugging-port=${p}`;
   return [
     'Set sh = CreateObject("WScript.Shell")',
     `sh.Run """${escapeVbsString(exePath)}"" ${cdpArg}", 1, False`,
@@ -49,11 +50,13 @@ export function buildWindowsVbsContent(exePath, port = DEFAULT_CDP_PORT) {
 }
 
 export function buildWindowsCmdContent(vbsPath, exePath, port = DEFAULT_CDP_PORT) {
-  const cdpArg = `--remote-debugging-port=${port}`;
+  const p = normalizeCdpPort(port, DEFAULT_CDP_PORT);
+  const cdpArg = `--remote-debugging-port=${p}`;
+  const portLabel = p === 0 ? 'auto' : `:${p}`;
   return [
     '@echo off',
     'chcp 65001 >nul',
-    `rem 静默启动 Antigravity CDP 模式 (:${port})，不修改 app.asar`,
+    `rem 静默启动 Antigravity CDP 模式 (${portLabel})，不修改 app.asar`,
     vbsPath
       ? `start "" wscript.exe //Nologo "${vbsPath}"`
       : `start "" /b "${exePath}" ${cdpArg}`,
@@ -110,7 +113,7 @@ export function detectWindowsCdpLauncher({
   port = DEFAULT_CDP_PORT,
   exePathOverride = '',
 } = {}) {
-  const p = Number(port) || DEFAULT_CDP_PORT;
+  const p = normalizeCdpPort(port, DEFAULT_CDP_PORT);
   const detected = exePathOverride
     ? { exePath: exePathOverride, found: fs.existsSync(exePathOverride) }
     : findWindowsAntigravityExe();
@@ -151,7 +154,7 @@ export async function generateWindowsCdpLauncher({
   createDesktopShortcut = true,
   skipWscript = false,
 } = {}) {
-  const p = Number(port) || DEFAULT_CDP_PORT;
+  const p = normalizeCdpPort(port, DEFAULT_CDP_PORT);
   const detected = exePathOverride
     ? { exePath: exePathOverride, found: fs.existsSync(exePathOverride) }
     : findWindowsAntigravityExe();
@@ -178,7 +181,7 @@ export async function generateWindowsCdpLauncher({
   if (!skipWscript && process.platform === 'win32') {
     const workDir = path.dirname(detected.exePath);
     const args = `--remote-debugging-port=${p}`;
-    const desc = `Antigravity (AGY HUD CDP :${p})`;
+    const desc = p === 0 ? 'Antigravity (AGY HUD CDP Auto)' : `Antigravity (AGY HUD CDP :${p})`;
     lnkCreated = await createWindowsShortcutLnk({
       lnkPath,
       targetPath: detected.exePath,

@@ -6,7 +6,99 @@
  * built-in `fetch` and `WebSocket`. Zero external dependencies.
  */
 
-import { DEFAULT_CDP_PORT } from './config.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {
+  DEFAULT_CDP_PORT,
+  LEGACY_DEFAULT_CDP_PORT,
+  normalizeCdpPort,
+} from './config.mjs';
+
+export function getDefaultAntigravityUserDataDirs({
+  platform = process.platform,
+  env = process.env,
+  homedir = os.homedir(),
+} = {}) {
+  const dirs = [];
+  if (platform === 'win32') {
+    const appData = env?.APPDATA || path.join(homedir, 'AppData', 'Roaming');
+    dirs.push(path.join(appData, 'Antigravity'), path.join(appData, 'antigravity'));
+  } else if (platform === 'darwin') {
+    dirs.push(
+      path.join(homedir, 'Library', 'Application Support', 'Antigravity'),
+      path.join(homedir, 'Library', 'Application Support', 'antigravity'),
+    );
+  } else {
+    const xdg = env?.XDG_CONFIG_HOME || path.join(homedir, '.config');
+    dirs.push(path.join(xdg, 'Antigravity'), path.join(xdg, 'antigravity'));
+  }
+  return Array.from(new Set(dirs));
+}
+
+/**
+ * Read Chromium/Electron's `DevToolsActivePort` file written automatically when
+ * Antigravity starts with `--remote-debugging-port=0` (or any port).
+ */
+export function readDevToolsActivePort({
+  userDataDirs = null,
+  platform = process.platform,
+  env = process.env,
+  homedir = os.homedir(),
+} = {}) {
+  const dirs = Array.isArray(userDataDirs)
+    ? userDataDirs
+    : getDefaultAntigravityUserDataDirs({ platform, env, homedir });
+
+  let best = null;
+  for (const dir of dirs) {
+    if (!dir) continue;
+    const filePath = path.join(dir, 'DevToolsActivePort');
+    try {
+      const stat = fs.statSync(filePath);
+      if (!stat.isFile()) continue;
+      const raw = fs.readFileSync(filePath, 'utf8').trim();
+      if (!raw) continue;
+      const lines = raw.split(/\r?\n/);
+      const port = Number(String(lines[0] || '').trim());
+      if (!Number.isInteger(port) || port < 1 || port > 65535) continue;
+      const wsPath = String(lines[1] || '').trim();
+      if (!best || stat.mtimeMs > best.mtimeMs) {
+        best = { port, wsPath, filePath, mtimeMs: stat.mtimeMs };
+      }
+    } catch {
+      // ignore missing/unreadable candidate
+    }
+  }
+  return best;
+}
+
+/**
+ * Build ordered, deduplicated list of CDP ports to probe:
+ *   1. Active dynamic port from `DevToolsActivePort` (highest priority)
+ *   2. Configured fixed port (if > 0)
+ *   3. Legacy default fixed port 9229 (backward compatibility with old shortcuts)
+ */
+export function resolveCandidateCdpPorts(
+  configuredPort = DEFAULT_CDP_PORT,
+  { userDataDirs = null, platform = process.platform, env = process.env, homedir = os.homedir() } = {},
+) {
+  const out = [];
+  const add = (p) => {
+    const n = Number(p);
+    if (Number.isInteger(n) && n >= 1 && n <= 65535 && !out.includes(n)) {
+      out.push(n);
+    }
+  };
+
+  const active = readDevToolsActivePort({ userDataDirs, platform, env, homedir });
+  if (active?.port) add(active.port);
+
+  const cfgPort = normalizeCdpPort(configuredPort, DEFAULT_CDP_PORT);
+  if (cfgPort > 0) add(cfgPort);
+  add(LEGACY_DEFAULT_CDP_PORT);
+  return out;
+}
 
 const CONV_URL_PATH_RE = /\/c\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
 const CONV_URL_QUERY_RE = /[?&]conversationId=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
@@ -74,31 +166,85 @@ export function isAntigravityAppTarget(target) {
   return true;
 }
 
-export async function listCdpTargets(port = DEFAULT_CDP_PORT, { host = '127.0.0.1', timeoutMs = 1500 } = {}) {
+export async function listCdpTargets(port = LEGACY_DEFAULT_CDP_PORT, { host = '127.0.0.1', timeoutMs = 1500 } = {}) {
+  const p = Number(port);
+  if (!Number.isInteger(p) || p < 1 || p > 65535) {
+    return { ok: false, status: 0, port: 0, targets: [], error: '无效的 CDP 端口' };
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(`http://${host}:${port}/json/list`, {
+    const res = await fetch(`http://${host}:${p}/json/list`, {
       signal: controller.signal,
       headers: { Connection: 'close' },
     });
     if (!res.ok) {
-      return { ok: false, status: res.status, targets: [] };
+      return { ok: false, status: res.status, port: p, targets: [] };
     }
     const raw = await res.json();
     const list = Array.isArray(raw) ? raw : [];
     const targets = list.filter(isAntigravityAppTarget);
-    return { ok: true, status: res.status, targets, totalTargets: list.length };
+    return { ok: true, status: res.status, port: p, targets, totalTargets: list.length };
   } catch (err) {
     return {
       ok: false,
       status: 0,
+      port: p,
       targets: [],
       error: err instanceof Error ? err.message : String(err),
     };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Probe candidate CDP ports (`DevToolsActivePort` first, then configured/legacy port)
+ * and return the first live endpoint serving Antigravity targets.
+ */
+export async function discoverCdpTargets(
+  configuredPort = DEFAULT_CDP_PORT,
+  {
+    host = '127.0.0.1',
+    timeoutMs = 1500,
+    userDataDirs = null,
+    platform = process.platform,
+    env = process.env,
+    homedir = os.homedir(),
+    listTargetsImpl = listCdpTargets,
+  } = {},
+) {
+  const candidates = resolveCandidateCdpPorts(configuredPort, {
+    userDataDirs,
+    platform,
+    env,
+    homedir,
+  });
+
+  let emptyOkFallback = null;
+  let lastError = '';
+
+  for (const candPort of candidates) {
+    const res = await listTargetsImpl(candPort, { host, timeoutMs });
+    if (res.ok && Array.isArray(res.targets) && res.targets.length > 0) {
+      return { ...res, port: candPort, triedPorts: candidates };
+    }
+    if (res.ok && !emptyOkFallback) {
+      emptyOkFallback = { ...res, port: candPort, triedPorts: candidates };
+    } else if (res.error) {
+      lastError = res.error;
+    }
+  }
+
+  if (emptyOkFallback) return emptyOkFallback;
+  return {
+    ok: false,
+    status: 0,
+    port: candidates[0] || 0,
+    targets: [],
+    triedPorts: candidates,
+    error: lastError || 'CDP 调试端口未就绪',
+  };
 }
 
 export function cdpEvaluate(wsUrl, expression, { timeoutMs = 2500 } = {}) {
@@ -200,16 +346,17 @@ export async function pushExpressionToTargets({
   timeoutMs = 2500,
 } = {}) {
   const discovery = targetsOverride
-    ? { ok: true, targets: targetsOverride }
-    : await listCdpTargets(port, { timeoutMs: Math.min(timeoutMs, 1500) });
+    ? { ok: true, port, targets: targetsOverride }
+    : await discoverCdpTargets(port, { timeoutMs: Math.min(timeoutMs, 1500) });
+  const activePort = discovery.port || port;
   if (!discovery.ok) {
     return {
       connected: false,
-      port,
+      port: activePort,
       injectedCount: 0,
       anchorFound: false,
       detectedConversationId: '',
-      error: discovery.error || `CDP 端口 :${port} 未就绪`,
+      error: discovery.error || 'CDP 调试端口未就绪',
     };
   }
 
@@ -238,7 +385,7 @@ export async function pushExpressionToTargets({
 
   return {
     connected: discovery.targets.length > 0 && injectedCount > 0,
-    port,
+    port: activePort,
     targetCount: discovery.targets.length,
     injectedCount,
     anchorFound,

@@ -10,7 +10,7 @@
  */
 
 import fs from 'node:fs';
-import { DEFAULT_CDP_PORT } from './config.mjs';
+import { DEFAULT_CDP_PORT, normalizeCdpPort } from './config.mjs';
 import {
   detectWindowsCdpLauncher,
   generateWindowsCdpLauncher,
@@ -29,7 +29,7 @@ export function detectPlatformLauncher({
   applicationsDir = '',
   port = DEFAULT_CDP_PORT,
 } = {}) {
-  const p = Number(port) || DEFAULT_CDP_PORT;
+  const p = normalizeCdpPort(port, DEFAULT_CDP_PORT);
   if (platform === 'win32') {
     return detectWindowsCdpLauncher({ dataDir, desktopDir, port: p });
   }
@@ -53,7 +53,7 @@ export async function generatePlatformLauncherForOs({
   applicationsDir = '',
   port = DEFAULT_CDP_PORT,
 } = {}) {
-  const p = Number(port) || DEFAULT_CDP_PORT;
+  const p = normalizeCdpPort(port, DEFAULT_CDP_PORT);
   if (platform === 'win32') {
     return generateWindowsCdpLauncher({ dataDir, desktopDir, port: p });
   }
@@ -160,7 +160,7 @@ export function createLauncherReconciler({
   }
 
   async function reconcile({ connected = false, cdpEnabled = true, port = DEFAULT_CDP_PORT } = {}) {
-    const p = Number(port) || DEFAULT_CDP_PORT;
+    const p = normalizeCdpPort(port, DEFAULT_CDP_PORT);
 
     if (connected) {
       outageEpoch += 1;
@@ -235,7 +235,7 @@ export function createLauncherReconciler({
 
   async function forceRegenerate({ port = DEFAULT_CDP_PORT } = {}) {
     lastFailureAtMs = 0;
-    const p = Number(port) || DEFAULT_CDP_PORT;
+    const p = normalizeCdpPort(port, DEFAULT_CDP_PORT);
     return runGenerate(p, 'auto_regenerated');
   }
 

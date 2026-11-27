@@ -17,6 +17,12 @@ import {
   generateMacCdpLauncher,
 } from '../sidecars/agy_hud/backend/launcher_mac.mjs';
 import { createLauncherReconciler } from '../sidecars/agy_hud/backend/launcher_check.mjs';
+import {
+  discoverCdpTargets,
+  getDefaultAntigravityUserDataDirs,
+  readDevToolsActivePort,
+  resolveCandidateCdpPorts,
+} from '../sidecars/agy_hud/backend/cdp_bridge.mjs';
 
 test('Windows launcher builders include --remote-debugging-port and zero-console wscript invocation', () => {
   const vbs = buildWindowsVbsContent('C:\\Apps\\Antigravity.exe', 9229);
@@ -196,4 +202,84 @@ test('createLauncherReconciler skips generation when launcher exists and auto-re
   const f2 = await failReconciler.reconcile({ connected: false, cdpEnabled: true, port: 9229 });
   assert.equal(f2.status, 'generate_failed');
   assert.equal(emptyGenCalls, 1); // Cooldown respected!
+});
+
+test('dynamic port 0 works on Windows & macOS launchers and DevToolsActivePort discovery falls back cleanly', async () => {
+  // 1. Windows dynamic port 0
+  const vbsAuto = buildWindowsVbsContent('C:\\Apps\\Antigravity.exe', 0);
+  assert.match(vbsAuto, /--remote-debugging-port=0/);
+  const cmdAuto = buildWindowsCmdContent('', 'C:\\Apps\\Antigravity.exe', 0);
+  assert.match(cmdAuto, /--remote-debugging-port=0/);
+
+  // 2. macOS dynamic port 0 (.app plist + DevToolsActivePort-aware bash script)
+  const plistAuto = buildMacInfoPlist({ port: 0, hasIcon: true });
+  assert.match(plistAuto, /<key>CFBundleVersion<\/key>\s*<string>auto<\/string>/);
+  const macScriptAuto = buildMacLauncherScript({ port: 0 });
+  assert.match(macScriptAuto, /PORT="0"/);
+  assert.match(macScriptAuto, /Library\/Application Support\/Antigravity\/DevToolsActivePort/);
+  assert.match(macScriptAuto, /probe_cdp_port/);
+  assert.match(macScriptAuto, /rm -f "\$\{ACTIVE_PORT_FILE\}"/);
+  assert.match(macScriptAuto, /--remote-debugging-port="\$\{PORT\}"/);
+
+  // 3. Cross-platform default userDataDir paths
+  const winDirs = getDefaultAntigravityUserDataDirs({
+    platform: 'win32',
+    env: { APPDATA: 'C:\\Users\\Demo\\AppData\\Roaming' },
+    homedir: 'C:\\Users\\Demo',
+  });
+  assert.ok(winDirs.some((d) => /AppData[\\/]Roaming[\\/]Antigravity$/.test(d)));
+
+  const macDirs = getDefaultAntigravityUserDataDirs({
+    platform: 'darwin',
+    homedir: '/Users/demo',
+  });
+  assert.ok(macDirs.some((d) => /Library[\\/]Application Support[\\/]Antigravity$/.test(d)));
+
+  const linuxDirs = getDefaultAntigravityUserDataDirs({
+    platform: 'linux',
+    env: {},
+    homedir: '/home/demo',
+  });
+  assert.ok(linuxDirs.some((d) => /\.config[\\/]Antigravity$/.test(d)));
+
+  // 4. DevToolsActivePort reading + priority ordering + stale-port fallback
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-hud-dtap-'));
+  try {
+    fs.writeFileSync(
+      path.join(tmpDir, 'DevToolsActivePort'),
+      '13498\n/devtools/browser/test-uuid\n',
+      'utf8',
+    );
+    const active = readDevToolsActivePort({ userDataDirs: [tmpDir] });
+    assert.equal(active.port, 13498);
+    assert.equal(active.wsPath, '/devtools/browser/test-uuid');
+
+    const candidates = resolveCandidateCdpPorts(0, { userDataDirs: [tmpDir] });
+    assert.deepEqual(candidates, [13498, 9229]);
+
+    // Case A: Dynamic port 13498 is live -> immediately selected
+    const liveRes = await discoverCdpTargets(0, {
+      userDataDirs: [tmpDir],
+      listTargetsImpl: async (p) =>
+        p === 13498
+          ? { ok: true, status: 200, port: p, targets: [{ id: 't1', url: 'https://127.0.0.1:3921/' }] }
+          : { ok: false, status: 0, port: p, targets: [], error: 'ECONNREFUSED' },
+    });
+    assert.equal(liveRes.ok, true);
+    assert.equal(liveRes.port, 13498);
+    assert.equal(liveRes.targets.length, 1);
+
+    // Case B: Stale DevToolsActivePort (13498 dead), old shortcut on 9229 is live -> falls back cleanly
+    const fallbackRes = await discoverCdpTargets(0, {
+      userDataDirs: [tmpDir],
+      listTargetsImpl: async (p) =>
+        p === 9229
+          ? { ok: true, status: 200, port: p, targets: [{ id: 't2', url: 'https://127.0.0.1:3921/' }] }
+          : { ok: false, status: 0, port: p, targets: [], error: 'ECONNREFUSED' },
+    });
+    assert.equal(fallbackRes.ok, true);
+    assert.equal(fallbackRes.port, 9229);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 });

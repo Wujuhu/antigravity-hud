@@ -13,7 +13,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { DEFAULT_CDP_PORT } from './config.mjs';
+import { DEFAULT_CDP_PORT, normalizeCdpPort } from './config.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -39,6 +39,8 @@ export function buildMacInfoPlist({
   port = DEFAULT_CDP_PORT,
   hasIcon = false,
 } = {}) {
+  const p = normalizeCdpPort(port, DEFAULT_CDP_PORT);
+  const bundleVer = p === 0 ? 'auto' : String(p);
   const iconBlock = hasIcon
     ? '  <key>CFBundleIconFile</key>\n  <string>AppIcon</string>\n'
     : '';
@@ -63,7 +65,7 @@ export function buildMacInfoPlist({
   <key>CFBundleShortVersionString</key>
   <string>1.1.0</string>
   <key>CFBundleVersion</key>
-  <string>${port}</string>
+  <string>${bundleVer}</string>
 ${iconBlock}  <key>LSUIElement</key>
   <true/>
   <key>NSHighResolutionCapable</key>
@@ -77,23 +79,45 @@ export function buildMacLauncherScript({
   targetAppPath = '/Applications/Antigravity.app',
   port = DEFAULT_CDP_PORT,
 } = {}) {
+  const p = normalizeCdpPort(port, DEFAULT_CDP_PORT);
   const safeApp = String(targetAppPath || '/Applications/Antigravity.app').replace(/"/g, '\\"');
   return `#!/bin/bash
 set -euo pipefail
 
-PORT="${port}"
+PORT="${p}"
 TARGET_APP="${safeApp}"
+ACTIVE_PORT_FILE="\${HOME}/Library/Application Support/Antigravity/DevToolsActivePort"
 
-# If CDP endpoint is already alive, simply bring Antigravity to front
-if curl -sf --max-time 1 "http://127.0.0.1:\${PORT}/json/version" >/dev/null 2>&1; then
-  open -a "\${TARGET_APP}"
-  exit 0
+probe_cdp_port() {
+  local cand="$1"
+  [ -n "\${cand}" ] && [ "\${cand}" != "0" ] && curl -sf --max-time 1 "http://127.0.0.1:\${cand}/json/version" >/dev/null 2>&1
+}
+
+# If CDP endpoint is already alive (dynamic DevToolsActivePort or fixed port), bring Antigravity to front
+if [ "\${PORT}" = "0" ]; then
+  if [ -f "\${ACTIVE_PORT_FILE}" ]; then
+    ACTIVE_PORT="$(head -n 1 "\${ACTIVE_PORT_FILE}" 2>/dev/null | tr -dc '0-9' || true)"
+    if probe_cdp_port "\${ACTIVE_PORT}"; then
+      open -a "\${TARGET_APP}"
+      exit 0
+    fi
+  fi
+else
+  if probe_cdp_port "\${PORT}"; then
+    open -a "\${TARGET_APP}"
+    exit 0
+  fi
 fi
 
-# If Antigravity is running without the CDP port, prompt the user cleanly
+# If Antigravity is running without an active CDP port, prompt the user cleanly
 if pgrep -x "Antigravity" >/dev/null 2>&1; then
   osascript -e 'display dialog "检测到 Antigravity 已在运行但未开启 CDP 调试端口。请先完全退出 (Cmd + Q) Antigravity，再双击本启动器重新打开。" buttons {"知道了"} default button "知道了" with title "AGY HUD"' >/dev/null 2>&1 || true
   exit 0
+fi
+
+# Clean stale DevToolsActivePort before fresh dynamic-port launch
+if [ "\${PORT}" = "0" ] && [ -f "\${ACTIVE_PORT_FILE}" ]; then
+  rm -f "\${ACTIVE_PORT_FILE}" 2>/dev/null || true
 fi
 
 open -a "\${TARGET_APP}" --args --remote-debugging-port="\${PORT}"
@@ -188,7 +212,7 @@ export function detectMacCdpLauncher({
   port = DEFAULT_CDP_PORT,
   targetAppOverride = '',
 } = {}) {
-  const p = Number(port) || DEFAULT_CDP_PORT;
+  const p = normalizeCdpPort(port, DEFAULT_CDP_PORT);
   const detected = targetAppOverride
     ? { appPath: targetAppOverride, found: fs.existsSync(targetAppOverride) }
     : findMacAntigravityApp();
@@ -248,7 +272,7 @@ export async function generateMacCdpLauncher({
   skipDesktopShortcut = process.platform !== 'darwin',
   execFileImpl = execFileAsync,
 } = {}) {
-  const p = Number(port) || DEFAULT_CDP_PORT;
+  const p = normalizeCdpPort(port, DEFAULT_CDP_PORT);
   const detected = targetAppOverride
     ? { appPath: targetAppOverride, found: fs.existsSync(targetAppOverride) }
     : findMacAntigravityApp();
