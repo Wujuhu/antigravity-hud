@@ -72,7 +72,6 @@ jobs:
 
           chmod +x "${STAGE_DIR}/install.sh" "${STAGE_DIR}/uninstall.sh"
           (cd dist/stage && zip -rq "../agy-hud-${RELEASE_TAG}.zip" agy-hud)
-          (cd dist && sha256sum "agy-hud-${RELEASE_TAG}.zip" > "agy-hud-${RELEASE_TAG}.zip.sha256")
           ls -lh dist/
 
       - name: Publish GitHub Release
@@ -80,11 +79,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ZIP_FILE="dist/agy-hud-${RELEASE_TAG}.zip"
-          SHA_FILE="dist/agy-hud-${RELEASE_TAG}.zip.sha256"
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            gh release upload "${RELEASE_TAG}" "${ZIP_FILE}" "${SHA_FILE}" --clobber
+            gh release upload "${RELEASE_TAG}" "${ZIP_FILE}" --clobber
           else
-            gh release create "${RELEASE_TAG}" "${ZIP_FILE}" "${SHA_FILE}" \
+            gh release create "${RELEASE_TAG}" "${ZIP_FILE}" \
               --title "AGY HUD ${RELEASE_TAG}" \
               --generate-notes
           fi
