@@ -38,6 +38,7 @@ import {
   checkForUpdates,
   readInstalledVersion,
 } from './backend/updater.mjs';
+import { ensureLauncherSyncedToCurrentVersion } from './backend/sync_launcher.mjs';
 import {
   RATE_SYNC_INTERVAL_MS,
   createRateSyncStore,
@@ -233,13 +234,18 @@ async function runApplyUpdate() {
     const applied = await applyPluginUpdate({
       downloadUrl: latestUpdateStatus.downloadUrl,
       targetPluginDir: PLUGIN_ROOT,
+      dataDir: configStore.dataDir,
     });
+    // Reload config in case the newly landed launcher sync migrated legacy cdpPort
+    configStore.reload();
+    await reconcileLauncherStatus().catch(() => {});
     latestUpdateStatus = {
       ...latestUpdateStatus,
       applying: false,
       hasUpdate: false,
       currentVersion: applied.updatedVersion,
       appliedVersion: applied.updatedVersion,
+      launcherSynced: Boolean(applied.launcherSynced),
       error: '',
     };
     return { ok: true, applied };
@@ -416,6 +422,16 @@ async function start() {
   restartPollingLoop();
   restartUpdateLoop();
   restartRateSyncLoop();
+  // Keep Windows/macOS launchers synced automatically after upgrades from older versions
+  ensureLauncherSyncedToCurrentVersion({
+    dataDir: configStore.dataDir,
+    pluginDir: PLUGIN_ROOT,
+    currentVersion: readInstalledVersion(PLUGIN_ROOT),
+  })
+    .then((res) => {
+      if (res && !res.skipped) configStore.reload();
+    })
+    .catch(() => {});
   syncOnce().catch(() => {});
   const initCfg = configStore.get();
   setTimeout(() => {

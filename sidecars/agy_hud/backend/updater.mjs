@@ -224,11 +224,16 @@ async function copyRecursive(src, dest) {
 }
 
 /**
- * Download and apply an update zip safely into `targetPluginDir` without touching user data.
+ * Download and apply an update zip safely into `targetPluginDir`, then invoke
+ * the newly landed `sync_launcher.mjs` in a clean Node subprocess so Windows
+ * and macOS launchers are refreshed in lockstep with the plugin body.
  */
 export async function applyPluginUpdate({
   downloadUrl,
   targetPluginDir,
+  dataDir = '',
+  syncLauncher = true,
+  syncLauncherImpl = null,
   fetchImpl = globalThis.fetch,
   execFileImpl = execFileAsync,
   platform = process.platform,
@@ -285,10 +290,56 @@ export async function applyPluginUpdate({
     }
 
     const newVersion = readInstalledVersion(targetPluginDir);
+
+    let launcherSynced = false;
+    let launcherPath = '';
+    let launcherSyncError = '';
+
+    if (syncLauncher && dataDir) {
+      const syncScript = path.join(
+        targetPluginDir,
+        'sidecars',
+        'agy_hud',
+        'backend',
+        'sync_launcher.mjs',
+      );
+      try {
+        if (typeof syncLauncherImpl === 'function') {
+          const syncRes = await syncLauncherImpl({
+            targetPluginDir,
+            dataDir,
+            newVersion,
+            syncScript,
+            platform,
+          });
+          launcherSynced = Boolean(syncRes?.ok !== false);
+          launcherPath = String(syncRes?.launcherPath || '');
+        } else if (fs.existsSync(syncScript)) {
+          const { stdout } = await execFileImpl(
+            process.execPath,
+            [syncScript, '--data-dir', dataDir, '--plugin-dir', targetPluginDir, '--version', newVersion],
+            {
+              timeout: 15_000,
+              windowsHide: true,
+              env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+            },
+          );
+          const parsed = stdout && stdout.trim() ? JSON.parse(stdout.trim()) : null;
+          launcherSynced = Boolean(parsed?.ok !== false);
+          launcherPath = String(parsed?.launcherPath || '');
+        }
+      } catch (err) {
+        launcherSyncError = err instanceof Error ? err.message : String(err);
+      }
+    }
+
     return {
       ok: true,
       updatedVersion: newVersion,
       targetPluginDir,
+      launcherSynced,
+      launcherPath,
+      launcherSyncError,
     };
   } finally {
     await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});

@@ -1,12 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import {
+  applyPluginUpdate,
   checkForUpdates,
   compareSemver,
   isAllowedDownloadUrl,
   validateRepoSlug,
 } from '../sidecars/agy_hud/backend/updater.mjs';
+import {
+  ensureLauncherSyncedToCurrentVersion,
+  readLauncherSyncState,
+  syncInstalledLauncher,
+} from '../sidecars/agy_hud/backend/sync_launcher.mjs';
+import { createConfigStore } from '../sidecars/agy_hud/backend/config.mjs';
 
 test('validateRepoSlug accepts valid GitHub slugs/URLs and rejects unsafe inputs', () => {
   assert.equal(validateRepoSlug('alice/agy-hud'), 'alice/agy-hud');
@@ -58,4 +68,81 @@ test('checkForUpdates detects newer GitHub release via mocked fetch', async () =
   assert.equal(res.hasUpdate, true);
   assert.equal(res.latestVersion, '1.2.0');
   assert.match(res.downloadUrl, /agy-hud-v1\.2\.0\.zip$/);
+});
+
+test('update and startup launcher sync migrates 9229 -> 0 and refreshes Windows & macOS launchers', async () => {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-hud-sync-'));
+  const dataDir = path.join(tmpRoot, 'data');
+  const pluginDir = path.join(tmpRoot, 'plugin');
+  const desktopDir = path.join(tmpRoot, 'Desktop');
+  const appsDir = path.join(tmpRoot, 'Applications');
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.mkdirSync(pluginDir, { recursive: true });
+  fs.mkdirSync(desktopDir, { recursive: true });
+  fs.writeFileSync(path.join(pluginDir, 'plugin.json'), JSON.stringify({ version: '1.1.1' }), 'utf8');
+
+  try {
+    await createConfigStore(dataDir).save({ cdpPort: 9229 });
+
+    const winRes = await syncInstalledLauncher({
+      dataDir,
+      pluginDir,
+      platform: 'win32',
+      desktopDir,
+      skipWscript: true,
+    });
+    assert.equal(winRes.port, 0);
+    assert.equal(createConfigStore(dataDir).get().cdpPort, 0);
+    assert.equal(readLauncherSyncState(dataDir).version, '1.1.1');
+
+    const skipRes = await ensureLauncherSyncedToCurrentVersion({
+      dataDir,
+      pluginDir,
+      currentVersion: '1.1.1',
+      platform: 'win32',
+      desktopDir,
+      skipWscript: true,
+    });
+    assert.equal(skipRes.skipped, true);
+
+    const macRes = await ensureLauncherSyncedToCurrentVersion({
+      dataDir,
+      pluginDir,
+      currentVersion: '1.1.2',
+      platform: 'darwin',
+      desktopDir,
+      applicationsDir: appsDir,
+      skipDesktopShortcut: true,
+    });
+    assert.equal(macRes.skipped, false);
+    assert.match(fs.readFileSync(macRes.launcher.scriptPath, 'utf8'), /PORT="0"/);
+
+    let syncedVersion = '';
+    const updRes = await applyPluginUpdate({
+      downloadUrl: 'https://github.com/Wujuhu/antigravity-hud/releases/download/v1.1.1/agy-hud-v1.1.1.zip',
+      targetPluginDir: pluginDir,
+      dataDir,
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => Buffer.alloc(256, 0x50).buffer,
+      }),
+      execFileImpl: async (_cmd, args) => {
+        const destIdx = args.indexOf('-C') >= 0 ? args.indexOf('-C') + 1 : args.indexOf('-d') + 1;
+        const root = path.join(args[destIdx], 'agy-hud');
+        fs.mkdirSync(path.join(root, 'sidecars', 'agy_hud', 'backend'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'plugin.json'), JSON.stringify({ version: '1.1.1' }), 'utf8');
+        fs.writeFileSync(path.join(root, 'sidecars', 'agy_hud', 'main.mjs'), '// ok\n', 'utf8');
+        return { stdout: '', stderr: '' };
+      },
+      syncLauncherImpl: async ({ newVersion }) => {
+        syncedVersion = newVersion;
+        return { ok: true, launcherPath: 'Antigravity (HUD).lnk' };
+      },
+    });
+    assert.equal(updRes.launcherSynced, true);
+    assert.equal(syncedVersion, '1.1.1');
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
 });

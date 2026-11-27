@@ -25,9 +25,10 @@ import {
   normalizeCdpPort,
   resolveDataDir,
 } from '../sidecars/agy_hud/backend/config.mjs';
-import { validateRepoSlug } from '../sidecars/agy_hud/backend/updater.mjs';
+import { readInstalledVersion, validateRepoSlug } from '../sidecars/agy_hud/backend/updater.mjs';
 import { generateWindowsCdpLauncher } from '../sidecars/agy_hud/backend/launcher_win.mjs';
 import { generateMacCdpLauncher } from '../sidecars/agy_hud/backend/launcher_mac.mjs';
+import { writeLauncherSyncState } from '../sidecars/agy_hud/backend/sync_launcher.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -156,6 +157,13 @@ export async function installPlugin({
       };
       log(`[4/4] Linux 请使用以下命令启动 CDP 模式: ${launcher.manualCommand}`);
     }
+    await writeLauncherSyncState(dataDir, {
+      version: readInstalledVersion(targetDir),
+      port: savedCfg.cdpPort,
+      platform: process.platform,
+      launcherPath: launcher?.lnkPath || launcher?.bundlePath || '',
+      syncedAtMs: Date.now(),
+    });
   } else {
     log('[4/4] 已按参数跳过 CDP 启动器生成');
   }

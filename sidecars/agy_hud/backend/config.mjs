@@ -222,10 +222,16 @@ export function createConfigStore(dataDir = resolveDataDir()) {
     return fresh;
   }
 
+  function reload() {
+    memoryCache = null;
+    return loadSync();
+  }
+
   return {
     dataDir,
     configFile,
     get: loadSync,
+    reload,
     save,
     reset,
   };
